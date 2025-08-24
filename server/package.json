@@ -15,7 +15,6 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "node-fetch": "^2.7.0",
-    "querystring": "^0.2.1",
-    "socket.io": "^4.8.1"
+    "querystring": "^0.2.1"
   }
 }
