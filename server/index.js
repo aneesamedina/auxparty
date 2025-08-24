@@ -229,12 +229,10 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
-  // Send the current queue immediately
-  socket.emit('queueUpdate', { queue, nowPlaying });
+  // Send a test message immediately
+  socket.emit('testMessage', { msg: 'Hello from server!' });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
+  socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
 // Replace app.listen with server.listen

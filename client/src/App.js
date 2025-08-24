@@ -30,6 +30,11 @@ function App() {
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
 
+    // Test connection
+    socket.on('testMessage', (data) => {
+      console.log('Received from server:', data);
+    });
+
     return () => socket.disconnect();
   }, []);
   // --------------------------
