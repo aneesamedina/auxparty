@@ -232,7 +232,7 @@ io.on('connection', (socket) => {
 
   // Send a test message immediately
   socket.emit('testMessage', { msg: 'Hello from server!' });
-
+  socket.emit('queueUpdate', { queue: [], nowPlaying: null });
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
