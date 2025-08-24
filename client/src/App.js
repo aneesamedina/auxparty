@@ -28,6 +28,7 @@ function App() {
     });
 
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
+      console.log("Received queueUpdate:", queue, nowPlaying);
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
