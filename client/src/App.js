@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { io } from 'socket.io-client'; // <-- new import
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -13,30 +14,24 @@ function App() {
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
     return {
-      trackName: np.trackName,       // use trackName from backend
+      trackName: np.trackName,
       artists: Array.isArray(np.artists) ? np.artists : [np.artists],
       addedBy: np.addedBy || ''
     };
   };
 
-  // Poll queue
+  // --- Real-time updates with Socket.IO ---
   useEffect(() => {
-    const fetchQueue = async () => {
-      try {
-        const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        const data = await res.json();
+    const socket = io(API_URL, { withCredentials: true });
 
-        setQueue(prev => JSON.stringify(prev) !== JSON.stringify(data.queue) ? data.queue : prev);
-        setNowPlaying(prev => JSON.stringify(prev) !== JSON.stringify(data.nowPlaying) ? normalizeNowPlaying(data.nowPlaying) : prev);
-      } catch (err) {
-        console.error("Error fetching queue:", err);
-      }
-    };
+    socket.on('connect', () => console.log('Connected via Socket.IO', socket.id));
 
-    fetchQueue();
-    const interval = setInterval(fetchQueue, 3000);
-    return () => clearInterval(interval);
+    socket.on('queueUpdate', ({ queue, nowPlaying }) => {
+      setQueue(queue);
+      setNowPlaying(normalizeNowPlaying(nowPlaying));
+    });
+
+    return () => socket.disconnect();
   }, []);
 
   const searchSong = async () => {
@@ -65,10 +60,7 @@ function App() {
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
 
-      // Update queue locally
       setQueue(data.queue);
-
-      // Only update nowPlaying if it was empty before or not playing
       setNowPlaying(prev => prev || data.nowPlaying);
 
       setName('');
@@ -131,7 +123,6 @@ function App() {
           {nowPlaying.trackName} by {nowPlaying.artists.join(', ')} 
         </div>
       )}
-
 
       <h2>Queue</h2>
       <ul>
