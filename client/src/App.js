@@ -13,12 +13,10 @@ function App() {
   useEffect(() => {
     const fetchQueue = async () => {
       try {
-        const res = await fetch(`${API_URL}/queue`, {
-          credentials: 'include', // send cookies
-        });
+        const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
-        setQueue(data);
+        setQueue(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error fetching queue:", err);
       }
@@ -33,12 +31,10 @@ function App() {
     if (!search) return;
 
     try {
-      const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(search)}`, {
-        credentials: 'include', // send cookies for auth
-      });
+      const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(search)}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
-      setResults(data.tracks || []); // use the correct property returned by backend
+      setResults(Array.isArray(data.tracks) ? data.tracks : []);
     } catch (err) {
       console.error("Error searching:", err);
     }
@@ -56,7 +52,7 @@ function App() {
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
-      setQueue(data.queue || []);
+      setQueue(Array.isArray(data.queue) ? data.queue : []);
       setName('');
       setSong('');
     } catch (err) {
@@ -64,18 +60,15 @@ function App() {
     }
   };
 
-  const addSongToQueue = (uri) => {
-    setSong(uri);
+  const addSongToQueue = (track) => {
+    setSong(track.uri);
     setResults([]);
     setSearch('');
   };
 
   const playNext = async () => {
     try {
-      const res = await fetch(`${API_URL}/play`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const res = await fetch(`${API_URL}/play`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       alert(data.message || "Played next song!");
@@ -96,47 +89,40 @@ function App() {
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <input
-          placeholder="Your Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-        />
-        <input
-          placeholder="Spotify URI"
-          value={song}
-          onChange={e => setSong(e.target.value)}
-          style={{ marginLeft: 10 }}
-        />
+        <input placeholder="Your Name" value={name} onChange={e => setName(e.target.value)} />
+        <input placeholder="Spotify URI" value={song} onChange={e => setSong(e.target.value)} style={{ marginLeft: 10 }} />
         <button onClick={addSong} style={{ marginLeft: 10 }}>Add to Queue</button>
       </div>
 
       <div>
-        <input
-          placeholder="Search Spotify"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        <button onClick={searchSong}>Search</button>
+        <input placeholder="Search Spotify" value={search} onChange={e => setSearch(e.target.value)} />
+        <button onClick={searchSong} style={{ marginLeft: 10 }}>Search</button>
 
         <ul>
-          {results.map((track, idx) => (
-            <li key={idx}>
-              {track.name} - {track.artists.join(", ")}
-              <button onClick={() => addSongToQueue(track.uri)} style={{ marginLeft: 10 }}>
-                Select
-              </button>
-            </li>
-          ))}
+          {results.map((track, idx) => {
+            const artists = Array.isArray(track.artists)
+              ? track.artists.map(a => (typeof a === 'string' ? a : a.name)).join(', ')
+              : 'Unknown Artist';
+            return (
+              <li key={idx}>
+                {track.name} - {artists}
+                <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>Select</button>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
       <h2>Queue</h2>
       <ul>
-        {queue.map((item, index) => (
-          <li key={index}>
-            {item.name} → {item.trackName} by {item.artists}
-          </li>
-        ))}
+        {queue.map((item, index) => {
+          const artists = Array.isArray(item.artists) ? item.artists.join(', ') : item.artists || 'Unknown';
+          return (
+            <li key={index}>
+              {item.name} → {item.trackName || item.song} by {artists}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
