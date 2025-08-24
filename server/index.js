@@ -221,7 +221,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: 'https://auxparty-pied.vercel.app',
-    methods: ['GET','POST']
+    methods: ['GET','POST'],
+    credentials: true,
   }
 });
 
