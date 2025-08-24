@@ -211,4 +211,31 @@ app.get('/search', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const http = require('http');
+const { Server } = require('socket.io');
+
+// Wrap Express app
+const server = http.createServer(app);
+
+// Create Socket.IO instance
+const io = new Server(server, {
+  cors: {
+    origin: 'https://auxparty-pied.vercel.app',
+    methods: ['GET','POST']
+  }
+});
+
+// Listen for connections
+io.on('connection', (socket) => {
+  console.log('New client connected:', socket.id);
+
+  // Send the current queue immediately
+  socket.emit('queueUpdate', { queue, nowPlaying });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Replace app.listen with server.listen
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
