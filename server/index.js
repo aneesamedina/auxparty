@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+
 const querystring = require('querystring');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
@@ -11,8 +12,8 @@ const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
 app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true,
+  origin: 'https://auxparty-pied.vercel.app',
+  credentials: true
 }));
 app.use(express.json());
 
