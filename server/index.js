@@ -6,27 +6,23 @@ const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fet
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-
-// CORS setup
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
-app.use(express.json());
-
 const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
-// In-memory store
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+}));
+app.use(express.json());
+
 let accessToken = null;
 let refreshToken = null;
 let queue = [];
+let nowPlaying = null;
+let isPlaying = false;
 
-// -----------------
 // Spotify Auth
-// -----------------
-
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
   const authUrl = 'https://accounts.spotify.com/authorize?' + querystring.stringify({
@@ -41,11 +37,11 @@ app.get('/login', (req, res) => {
 app.get('/auth/callback', async (req, res) => {
   const code = req.query.code || null;
   try {
-    const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ' + Buffer.from(`${client_id}:${client_secret}`).toString('base64')
+        Authorization: 'Basic ' + Buffer.from(client_id + ':' + client_secret).toString('base64')
       },
       body: querystring.stringify({
         grant_type: 'authorization_code',
@@ -53,10 +49,9 @@ app.get('/auth/callback', async (req, res) => {
         redirect_uri
       })
     });
-    const data = await tokenResponse.json();
+    const data = await tokenRes.json();
     accessToken = data.access_token;
     refreshToken = data.refresh_token;
-
     res.send('Logged in! You can now control playback.');
   } catch (err) {
     console.error(err);
@@ -64,14 +59,14 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// Refresh access token
+// Helpers
 async function refreshAccessToken() {
   if (!refreshToken) throw new Error('No refresh token available');
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ' + Buffer.from(`${client_id}:${client_secret}`).toString('base64')
+      Authorization: 'Basic ' + Buffer.from(client_id + ':' + client_secret).toString('base64')
     },
     body: querystring.stringify({
       grant_type: 'refresh_token',
@@ -83,44 +78,24 @@ async function refreshAccessToken() {
   return accessToken;
 }
 
-// -----------------
-// Spotify Fetch Helper
-// -----------------
-
-async function spotifyFetch(url, options = {}) {
+async function spotifyFetch(url, options = {}, retry = true) {
   if (!accessToken) throw new Error('Not authorized');
-
-  try {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        ...options.headers,
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    // Refresh token if expired
-    if (res.status === 401) {
-      await refreshAccessToken();
-      return spotifyFetch(url, options);
-    }
-
-    // Handle 204 No Content
-    if (res.status === 204) return null;
-
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  } catch (err) {
-    console.error('Spotify fetch error:', err);
-    throw err;
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${accessToken}` },
+  });
+  if (res.status === 401 && retry) {
+    await refreshAccessToken();
+    return spotifyFetch(url, options, false);
   }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
-// -----------------
-// Queue Endpoints
-// -----------------
-
-app.get('/queue', (req, res) => res.json(queue));
+// Queue endpoints
+app.get('/queue', (req, res) => {
+  res.json({ queue, nowPlaying });
+});
 
 app.post('/queue', async (req, res) => {
   const { name, song: uri } = req.body;
@@ -129,47 +104,94 @@ app.post('/queue', async (req, res) => {
   try {
     const trackId = uri.split(':')[2];
     const trackData = await spotifyFetch(`https://api.spotify.com/v1/tracks/${trackId}`);
-
     const newItem = {
       name,
       song: uri,
       trackName: trackData.name,
-      artists: trackData.artists.map(a => a.name).join(', '),
+      artists: trackData.artists.map(a => a.name),
     };
-
     queue.push(newItem);
-    res.json({ queue });
+
+    // Only auto-play if nothing is playing
+    if (!nowPlaying) {
+      playNextSong();
+    }
+
+    // Respond with actual current state
+    res.json({ queue, nowPlaying });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to add song:', err);
     res.status(500).json({ error: 'Failed to add song' });
   }
 });
 
-// -----------------
-// Playback Endpoint
-// -----------------
-
-app.post('/play', async (req, res) => {
-  if (!queue.length) return res.json({ message: 'Queue is empty' });
+// Play next song
+async function playNextSong() {
+  if (!queue.length) {
+    isPlaying = false;
+    nowPlaying = null;
+    return;
+  }
 
   const next = queue.shift();
+
+  nowPlaying = {
+    trackName: next.trackName, // this is the actual song name from Spotify
+    song: next.song,           // URI
+    artists: next.artists,     // array of artist names
+    addedBy: next.name          // optional: the user who added it
+  };
+
+  isPlaying = true;
+
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [next.song] })
+      body: JSON.stringify({ uris: [next.song] }),
     });
-    res.json({ message: `Now playing: ${next.trackName} by ${next.artists}` });
+
+    const poll = setInterval(async () => {
+      try {
+        const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+        if (!player || !player.item) {
+          clearInterval(poll);
+          isPlaying = false;
+          nowPlaying = null;
+          return;
+        }
+        if (!player.is_playing) {
+          clearInterval(poll);
+          if (queue.length) playNextSong();
+          else isPlaying = false;
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        clearInterval(poll);
+        isPlaying = false;
+        nowPlaying = null;
+      }
+    }, 2000);
+
+  } catch (err) {
+    console.error('Failed to play song:', err);
+    isPlaying = false;
+    nowPlaying = null;
+  }
+}
+
+// Manual skip
+app.post('/play', async (req, res) => {
+  try {
+    await playNextSong();
+    res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to play song' });
+    res.status(500).json({ error: 'Failed to play next song' });
   }
 });
 
-// -----------------
-// Spotify Search Endpoint
-// -----------------
-
+// Search
 app.get('/search', async (req, res) => {
   const q = req.query.q;
   if (!q) return res.status(400).json({ error: 'Query required' });
@@ -183,13 +205,9 @@ app.get('/search', async (req, res) => {
     }));
     res.json({ tracks });
   } catch (err) {
-    console.error(err);
+    console.error('Search failed:', err);
     res.status(500).json({ error: 'Failed to search Spotify' });
   }
 });
-
-// -----------------
-// Start Server
-// -----------------
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
