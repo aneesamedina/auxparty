@@ -1,9 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
 const querystring = require('querystring');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -11,19 +12,42 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
+// Middleware
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
   credentials: true
 }));
 app.use(express.json());
 
+// Create HTTP server and attach Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: 'https://auxparty-pied.vercel.app',
+    methods: ['GET','POST']
+  }
+});
+
+// In-memory data
 let accessToken = null;
 let refreshToken = null;
 let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
-// Spotify Auth
+// Socket.IO connections
+io.on('connection', (socket) => {
+  console.log('New client connected:', socket.id);
+
+  // Send current state immediately
+  socket.emit('queueUpdate', { queue, nowPlaying });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Spotify Auth routes
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
   const authUrl = 'https://accounts.spotify.com/authorize?' + querystring.stringify({
@@ -113,12 +137,13 @@ app.post('/queue', async (req, res) => {
     };
     queue.push(newItem);
 
-    // Only auto-play if nothing is playing
     if (!nowPlaying) {
       playNextSong();
     }
 
-    // Respond with actual current state
+    // Emit updated queue to all clients
+    io.emit('queueUpdate', { queue, nowPlaying });
+
     res.json({ queue, nowPlaying });
   } catch (err) {
     console.error('Failed to add song:', err);
@@ -131,19 +156,23 @@ async function playNextSong() {
   if (!queue.length) {
     isPlaying = false;
     nowPlaying = null;
+    io.emit('queueUpdate', { queue, nowPlaying });
     return;
   }
 
   const next = queue.shift();
 
   nowPlaying = {
-    trackName: next.trackName, // this is the actual song name from Spotify
-    song: next.song,           // URI
-    artists: next.artists,     // array of artist names
-    addedBy: next.name          // optional: the user who added it
+    trackName: next.trackName,
+    song: next.song,
+    artists: next.artists,
+    addedBy: next.name
   };
 
   isPlaying = true;
+
+  // Emit updated queue immediately
+  io.emit('queueUpdate', { queue, nowPlaying });
 
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
@@ -159,6 +188,7 @@ async function playNextSong() {
           clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
+          io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
         if (!player.is_playing) {
@@ -171,6 +201,7 @@ async function playNextSong() {
         clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
+        io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
 
@@ -178,6 +209,7 @@ async function playNextSong() {
     console.error('Failed to play song:', err);
     isPlaying = false;
     nowPlaying = null;
+    io.emit('queueUpdate', { queue, nowPlaying });
   }
 }
 
@@ -211,4 +243,5 @@ app.get('/search', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Start server
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
