@@ -23,7 +23,9 @@ function App() {
   // --------------------------
   // Socket.IO for real-time updates
   useEffect(() => {
-    const socket = io("https://auxparty.onrender.com"); 
+    const socket = io(API_URL, {
+      withCredentials: true, // ensures cookies work if needed
+    });
 
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
