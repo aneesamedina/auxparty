@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { io } from 'socket.io-client'; // <-- new import
+import { io } from 'socket.io-client'; // <-- add this
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -20,11 +20,10 @@ function App() {
     };
   };
 
-  // --- Real-time updates with Socket.IO ---
+  // --------------------------
+  // Socket.IO for real-time updates
   useEffect(() => {
     const socket = io(API_URL, { withCredentials: true });
-
-    socket.on('connect', () => console.log('Connected via Socket.IO', socket.id));
 
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
@@ -32,6 +31,26 @@ function App() {
     });
 
     return () => socket.disconnect();
+  }, []);
+  // --------------------------
+
+  // Keep polling as a fallback if you want
+  useEffect(() => {
+    const fetchQueue = async () => {
+      try {
+        const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const data = await res.json();
+        setQueue(prev => JSON.stringify(prev) !== JSON.stringify(data.queue) ? data.queue : prev);
+        setNowPlaying(prev => JSON.stringify(prev) !== JSON.stringify(data.nowPlaying) ? normalizeNowPlaying(data.nowPlaying) : prev);
+      } catch (err) {
+        console.error("Error fetching queue:", err);
+      }
+    };
+
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const searchSong = async () => {
