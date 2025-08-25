@@ -24,7 +24,7 @@ function LoginPage({ onSelectRole }) {
         alignItems: 'center',
         textAlign: 'center',
         padding: 40,
-        background: 'linear-gradient(135deg, #ff6b81, #feca57, #1dd1a1, #48dbfb)',
+        background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
         backgroundSize: '400% 400%',
         animation: 'gradientAnimation 15s ease infinite',
         color: '#fff',
@@ -40,6 +40,9 @@ function LoginPage({ onSelectRole }) {
           fontSize: 18,
           borderRadius: 8,
           cursor: 'pointer',
+          backgroundColor: '#ff4757',
+          color: '#fff',
+          border: 'none',
         }}
       >
           Host (Spotify)
@@ -50,9 +53,22 @@ function LoginPage({ onSelectRole }) {
           fontSize: 20,
           borderRadius: 8,
           cursor: 'pointer',
+          backgroundColor: '#1e90ff',
+          color: '#fff',
+          border: 'none',
+
         }}
           >Guest</button>
       </div>
+       <style>
+        {`
+          @keyframes gradientAnimation {
+            0%{background-position:0% 50%}
+            50%{background-position:100% 50%}
+            100%{background-position:0% 50%}
+          }
+        `}
+      </style>
     </div>
   );
 }
