@@ -30,7 +30,14 @@ function LoginPage({ onSelectRole }) {
       >
           Host (Spotify)
         </button>
-        <button onClick={() => onSelectRole('guest')}>Guest</button>
+        <button onClick={() => onSelectRole('guest')}
+          style={{
+          padding: '15px 30px',
+          fontSize: 20,
+          borderRadius: 8,
+          cursor: 'pointer',
+        }}
+          >Guest</button>
       </div>
     </div>
   );
