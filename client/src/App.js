@@ -58,10 +58,10 @@ function LoginPage({ onSelectRole }) {
             transition: all 0.3s ease;
           }
           .host-button {
-            background-color: #ff4757;
+            background-color: #aaaaaaff;
           }
           .guest-button {
-            background-color: #1e90ff;
+            background-color: #303030ff;
           }
           .role-button:hover {
             box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
