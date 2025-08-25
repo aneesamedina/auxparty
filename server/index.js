@@ -5,6 +5,8 @@ const cors = require('cors');
 const querystring = require('querystring');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
+const sessions = {}; // sessionId -> { name, role }
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
@@ -92,6 +94,17 @@ async function spotifyFetch(url, options = {}, retry = true) {
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 }
+
+app.post('/login', (req, res) => {
+  const { name, role } = req.body;
+  if (!name || !role || !['host','guest'].includes(role)) {
+    return res.status(400).json({ error: 'Missing or invalid name/role' });
+  }
+
+  const sessionId = Math.random().toString(36).substring(2, 15);
+  sessions[sessionId] = { name, role };
+  res.json({ sessionId, name, role });
+});
 
 // Queue endpoints
 app.get('/queue', (req, res) => {
