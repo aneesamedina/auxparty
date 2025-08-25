@@ -201,8 +201,8 @@ function MainQueueApp({ role }) {
         }
 
         .queue-button, .role-button {
-          padding: 12px 24px;
-          font-size: 18px;
+          padding: 8px 20px;
+          font-size: 16px;
           border-radius: 12px; /* slightly more rounded */
           border: none;
           cursor: pointer;
@@ -297,15 +297,6 @@ function MainQueueApp({ role }) {
       </div>
 
       <div>
-        <input
-          placeholder="Search Spotify"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <button onClick={searchSong} style={{ marginLeft: 10 }}>
-          Search
-        </button>
-
       <ul>
         {results.map((track, idx) => (
           <li key={idx} className="song-item">
