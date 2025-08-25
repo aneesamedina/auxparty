@@ -158,7 +158,7 @@ function App() {
       {nowPlaying && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
           <img
-            src={nowPlaying.album?.images[0]?.url} // album art
+            src={nowPlaying.album?.images[1]?.url} // album art
             alt={nowPlaying.trackName}
             style={{ width: 64, height: 64, marginRight: 10 }}
           />
