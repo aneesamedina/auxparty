@@ -110,6 +110,10 @@ app.post('/queue', async (req, res) => {
       song: uri,
       trackName: trackData.name,
       artists: trackData.artists.map(a => a.name),
+      album: {
+        name: trackData.album.name,
+        images: trackData.album.images
+      }
     };
     queue.push(newItem);
 
@@ -202,7 +206,11 @@ app.get('/search', async (req, res) => {
     const tracks = data.tracks.items.map(track => ({
       name: track.name,
       artists: track.artists.map(a => a.name),
-      uri: track.uri
+      uri: track.uri,
+      album: {
+        name: track.album.name,
+        images: track.album.images
+      }
     }));
     res.json({ tracks });
   } catch (err) {
@@ -232,7 +240,7 @@ io.on('connection', (socket) => {
 
   // Send a test message immediately
   socket.emit('testMessage', { msg: 'Hello from server!' });
-  socket.emit('queueUpdate', { queue: [], nowPlaying: null });
+  socket.emit('queueUpdate', { queue, nowPlaying });
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 

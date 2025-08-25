@@ -154,8 +154,17 @@ function App() {
       <h2>Queue</h2>
       <ul>
         {queue.map((item, index) => (
-          <li key={index}>
-            {item.name} → {item.trackName || item.song} by {item.artists.join(', ')}
+          <li key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+            {/* Album art */}
+            <img 
+              src={item.album?.images[0]?.url || ''} 
+              alt={item.trackName || item.song} 
+              style={{ width: 64, height: 64, marginRight: 10 }}
+            />
+            {/* Track info */}
+            <div>
+              {item.trackName || item.song} by {item.artists.join(', ')}
+            </div>
           </li>
         ))}
       </ul>
