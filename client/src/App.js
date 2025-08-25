@@ -143,6 +143,7 @@ function MainQueueApp({ role }) {
     <div style={{ padding: 20 }}>
       <h1>Party Queue - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
+      {/* Host controls */}
       {role === 'host' && (
         <div style={{ marginBottom: 20 }}>
           <a
@@ -158,6 +159,7 @@ function MainQueueApp({ role }) {
         </div>
       )}
 
+      {/* Add song */}
       <div style={{ marginBottom: 20 }}>
         <input
           placeholder="Your Name"
@@ -175,6 +177,7 @@ function MainQueueApp({ role }) {
         </button>
       </div>
 
+      {/* Search */}
       <div>
         <input
           placeholder="Search Spotify"
@@ -213,6 +216,7 @@ function MainQueueApp({ role }) {
         </ul>
       </div>
 
+      {/* Now Playing */}
       <h2>Now Playing</h2>
       {nowPlaying && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
@@ -230,6 +234,7 @@ function MainQueueApp({ role }) {
         </div>
       )}
 
+      {/* Queue */}
       <h2>Queue</h2>
       <ul>
         {queue.map((item, index) => (
