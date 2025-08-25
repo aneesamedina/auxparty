@@ -119,7 +119,7 @@ app.post('/queue', async (req, res) => {
     const trackId = uri.split(':')[2];
     const trackData = await spotifyFetch(`https://api.spotify.com/v1/tracks/${trackId}`);
     const newItem = {
-      name,
+      addedBy: name,
       song: uri,
       trackName: trackData.name,
       artists: trackData.artists.map(a => a.name),
@@ -157,7 +157,7 @@ async function playNextSong() {
     trackName: next.trackName, // this is the actual song name from Spotify
     song: next.song,           // URI
     artists: next.artists,     // array of artist names
-    addedBy: next.name,          // optional: the user who added it
+    addedBy: next.addedBy,          // optional: the user who added it
     album: next.album
   };
   io.emit('queueUpdate', { queue, nowPlaying });
