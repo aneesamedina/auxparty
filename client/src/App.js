@@ -19,7 +19,15 @@ function LoginPage({ onSelectRole }) {
       <h1>Welcome to Party Queue</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 20 }}>
-        <button onClick={handleHostLogin} style={{ marginRight: 20 }}>
+        <button onClick={handleHostLogin} 
+        style={{ 
+          marginRight: 20,
+          padding: '15px 30px',
+          fontSize: 18,
+          borderRadius: 8,
+          cursor: 'pointer',
+        }}
+      >
           Host (Spotify)
         </button>
         <button onClick={() => onSelectRole('guest')}>Guest</button>
