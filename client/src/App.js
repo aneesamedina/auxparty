@@ -10,7 +10,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
-  const [role, setRole] = useState(localStorage.getItem("role") || null);
+  const [role, setRole] = useState('guest'); // default guest
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
@@ -36,7 +36,6 @@ function App() {
   }, []);
   // --------------------------
 
-  // Polling fallback
   useEffect(() => {
     const fetchQueue = async () => {
       try {
@@ -55,30 +54,11 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // --------------------------
-  // Login
-  const handleLogin = async (enteredName, enteredRole) => {
-    if (!enteredName || !enteredRole) return alert("Enter name and select role");
-
-    try {
-      const res = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: enteredName, role: enteredRole }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json();
-      localStorage.setItem("sessionId", data.sessionId);
-      localStorage.setItem("role", data.role);
-      setRole(data.role);
-      setName(data.name);
-    } catch (err) {
-      console.error("Login error:", err);
-    }
+  const handleHostLogin = () => {
+    setRole('host');
+    window.location.href = `${API_URL}/login`;
   };
 
-  // --------------------------
   const searchSong = async () => {
     if (!search) return;
     try {
@@ -108,6 +88,7 @@ function App() {
       setQueue(data.queue);
       setNowPlaying(prev => prev || data.nowPlaying);
 
+      setName('');
       setSong('');
     } catch (err) {
       console.error("Error adding song:", err);
@@ -132,36 +113,23 @@ function App() {
     }
   };
 
-  // --------------------------
-  // Render
-  if (!role) {
-    // Login page
-    return (
-      <div style={{ padding: 20 }}>
-        <h1>Login</h1>
-        <input placeholder="Your Name" value={name} onChange={e => setName(e.target.value)} />
-        <div style={{ marginTop: 10 }}>
-          <button onClick={() => handleLogin(name, "host")}>Login as Host</button>
-          <button onClick={() => handleLogin(name, "guest")} style={{ marginLeft: 10 }}>Login as Guest</button>
-        </div>
-      </div>
-    )
-  }
-
-  // Queue page
   return (
     <div style={{ padding: 20 }}>
-      <h1>Party Queue ({role})</h1>
-
-      {role === "host" && (
-        <div style={{ marginBottom: 20 }}>
-          <button onClick={playNext}>Next Song</button>
-        </div>
-      )}
+      <h1>Party Queue</h1>
 
       <div style={{ marginBottom: 20 }}>
-        <input placeholder="Spotify URI" value={song} onChange={e => setSong(e.target.value)} style={{ marginRight: 10 }} />
-        <button onClick={addSong}>Add to Queue</button>
+        {role === 'guest' && (
+          <button onClick={handleHostLogin}>Host Login (Spotify)</button>
+        )}
+        {role === 'host' && (
+          <button onClick={playNext} style={{ marginLeft: 10 }}>Next Song</button>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <input placeholder="Your Name" value={name} onChange={e => setName(e.target.value)} />
+        <input placeholder="Spotify URI" value={song} onChange={e => setSong(e.target.value)} style={{ marginLeft: 10 }} />
+        <button onClick={addSong} style={{ marginLeft: 10}}>Add to Queue</button>
       </div>
 
       <div>
