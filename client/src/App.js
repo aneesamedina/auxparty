@@ -296,6 +296,21 @@ function MainQueueApp({ role }) {
         <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
 
+      <div>
+      <ul>
+        {results.map((track, idx) => (
+          <li key={idx} className="song-item">
+            <img src={track.album?.images[0]?.url} alt={track.name} />
+            <div className="song-info">
+              <div className="title">{track.name}</div>
+              <div className="artists">{track.artists.join(', ')}</div>
+            </div>
+            <button className="queue-button host-button" onClick={() => addSongToQueue(track)}>Select</button>
+          </li>
+        ))}
+      </ul>
+      </div>
+
       <h2>Now Playing</h2>
       {nowPlaying && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
