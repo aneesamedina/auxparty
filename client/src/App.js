@@ -307,6 +307,9 @@ function MainQueueApp({ role }) {
             />
             <div>
               {item.trackName || item.song} by {item.artists.join(', ')}
+              {item.addedBy && (
+                <div style={{ fontSize: 12, color: '#aaa' }}>Added by: {item.addedBy}</div>
+              )}
             </div>
           </li>
         ))}
