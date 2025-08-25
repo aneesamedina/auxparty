@@ -78,7 +78,7 @@ function LoginPage({ onSelectRole }) {
 // -------------------
 function MainQueueApp({ role }) {
   const [queue, setQueue] = useState([]);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => localStorage.getItem("guestName") || "");
   const [song, setSong] = useState('');
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
@@ -93,6 +93,11 @@ function MainQueueApp({ role }) {
       album: np.album,
     };
   };
+
+  // Save guest name to localStorage
+  useEffect(() => {
+    if (name) localStorage.setItem("guestName", name);
+  }, [name]);
 
   // --------------------------
   // Socket.IO for real-time updates
@@ -158,8 +163,7 @@ function MainQueueApp({ role }) {
       const data = await res.json();
       setQueue(data.queue);
       setNowPlaying((prev) => prev || data.nowPlaying);
-      setName('');
-      setSong('');
+      setSong(''); // don't reset name anymore
     } catch (err) {
       console.error('Error adding song:', err);
     }
@@ -240,11 +244,15 @@ return (
     )}
 
       <div style={{ marginBottom: 20 }}>
-        <input
-          placeholder="Your Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        {!name && (
+          <input
+            placeholder="Your Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        )}
+        {name && <span>👋 Welcome, {name}</span>}
+        
         <input
           placeholder="Spotify URI"
           value={song}
