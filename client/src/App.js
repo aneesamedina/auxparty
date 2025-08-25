@@ -275,7 +275,7 @@ function MainQueueApp({ role }) {
             onChange={(e) => setDraftName(e.target.value)}
           />
         )}
-        {name && <span>👋 Welcome, {name}</span>}
+        <div>{name && <span>👋 Welcome, {name}</span>}</div>
 
         <input
           className="song-input"
