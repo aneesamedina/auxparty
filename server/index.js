@@ -144,7 +144,8 @@ async function playNextSong() {
     trackName: next.trackName, // this is the actual song name from Spotify
     song: next.song,           // URI
     artists: next.artists,     // array of artist names
-    addedBy: next.name          // optional: the user who added it
+    addedBy: next.name,          // optional: the user who added it
+    album: next.album
   };
 
   isPlaying = true;

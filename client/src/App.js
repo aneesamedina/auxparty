@@ -136,8 +136,18 @@ function App() {
 
         <ul>
           {results.map((track, idx) => (
-            <li key={idx}>
-              {track.name} - {track.artists.join(', ')}
+            <li key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <img
+                src={track.album?.images[0]?.url} // album art
+                alt={track.name}
+                style={{ width: 64, height: 64, marginRight: 10 }}
+              />
+              <div>
+                <div>{track.name}</div>
+                <div style={{ fontSize: 12, color: '#555' }}>
+                  {track.artists.join(', ')}
+                </div>
+              </div>
               <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>Select</button>
             </li>
           ))}
@@ -146,8 +156,18 @@ function App() {
 
       <h2>Now Playing</h2>
       {nowPlaying && (
-        <div>
-          {nowPlaying.trackName} by {nowPlaying.artists.join(', ')} 
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <img
+            src={nowPlaying.album?.images[0]?.url} // album art
+            alt={nowPlaying.trackName}
+            style={{ width: 64, height: 64, marginRight: 10 }}
+          />
+          <div>
+            <div>{nowPlaying.trackName}</div>
+            <div style={{ fontSize: 12, color: '#555' }}>
+              {nowPlaying.artists.join(', ')}
+            </div>
+          </div>
         </div>
       )}
 
