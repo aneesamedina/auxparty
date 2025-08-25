@@ -292,6 +292,11 @@ function MainQueueApp({ role }) {
             <div style={{ fontSize: 12, color: '#555' }}>
               {nowPlaying.artists.join(', ')}
             </div>
+            {nowPlaying.addedBy && (
+              <div style={{ fontSize: 12, color: '#aaa' }}>
+                Added by: {nowPlaying.addedBy}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -306,7 +311,7 @@ function MainQueueApp({ role }) {
               style={{ width: 64, height: 64, marginRight: 10 }}
             />
             <div>
-              {item.trackName || item.song} by {item.artists.join(', ')}
+              <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
               {item.addedBy && (
                 <div style={{ fontSize: 12, color: '#aaa' }}>Added by: {item.addedBy}</div>
               )}
