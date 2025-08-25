@@ -147,7 +147,7 @@ async function playNextSong() {
     addedBy: next.name,          // optional: the user who added it
     album: next.album
   };
-
+  io.emit('queueUpdate', { queue, nowPlaying });
   isPlaying = true;
 
   try {
