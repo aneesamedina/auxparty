@@ -8,20 +8,10 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 function LoginPage({ onSelectRole }) {
   const handleHostLogin = () => {
-    const hostWindow = window.open(
-      `${API_URL}/login`,
-      '_blank',
-      'noopener,noreferrer'
-    );
-
-    // Poll localStorage to detect host login
-    const timer = setInterval(() => {
-      if (localStorage.getItem('hostLoggedIn') === 'true') {
-        onSelectRole('host');
-        clearInterval(timer);
-        hostWindow.close(); // optional: close login tab
-      }
-    }, 500);
+    // Open Spotify login in a new tab
+    window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
+    // Immediately switch to host queue page
+    onSelectRole('host');
   };
 
   return (
@@ -72,6 +62,8 @@ function MainQueueApp({ role }) {
     return () => socket.disconnect();
   }, []);
 
+  // --------------------------
+  // Polling as fallback
   useEffect(() => {
     const fetchQueue = async () => {
       try {
@@ -203,7 +195,10 @@ function MainQueueApp({ role }) {
                   {track.artists.join(', ')}
                 </div>
               </div>
-              <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>
+              <button
+                onClick={() => addSongToQueue(track)}
+                style={{ marginLeft: 10 }}
+              >
                 Select
               </button>
             </li>
@@ -255,22 +250,6 @@ function MainQueueApp({ role }) {
 // -------------------
 function App() {
   const [role, setRole] = useState(null); // null = not selected yet
-
-  useEffect(() => {
-    // Check query params for host login redirect
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('loggedIn') === 'host') {
-      setRole('host');
-      localStorage.setItem('hostLoggedIn', 'true');
-      window.history.replaceState({}, '', '/'); // clean URL
-    }
-
-    // Check localStorage in case host tab logged in already
-    const hostLoggedIn = localStorage.getItem('hostLoggedIn');
-    if (hostLoggedIn === 'true') {
-      setRole('host');
-    }
-  }, []);
 
   if (!role) {
     return <LoginPage onSelectRole={setRole} />;
