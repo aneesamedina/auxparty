@@ -123,6 +123,9 @@ app.post('/queue', async (req, res) => {
     // Only auto-play if nothing is playing
     if (!nowPlaying) {
       playNextSong();
+    } else {
+      // Update clients with new queue
+      io.emit('queueUpdate', { queue, nowPlaying });
     }
 
     // Respond with actual current state
@@ -134,75 +137,88 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
+let currentPoll = null;
+
 async function playNextSong() {
-  let next;
-
-  // Get next song from queue or random
-  if (queue.length > 0) {
-    next = queue.shift();
-  } else {
-    next = await getRandomTrack();
-  }
-
-  if (!next || !next.song) {
-    console.error('No next track available');
-    nowPlaying = null;
-    isPlaying = false;
-    io.emit('queueUpdate', { queue, nowPlaying });
-    return;
-  }
-
-  nowPlaying = next;
-  isPlaying = true;
-
   try {
-    // Play the song on Spotify
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [next.song] }),
-    });
+    let next;
 
-    // Emit updated queue/nowPlaying after successful play
+    // Get next song from queue or random
+    if (queue.length > 0) {
+      next = queue.shift();
+    } else {
+      next = await getRandomTrack();
+    }
+
+    if (!next || !next.song) {
+      console.warn('No next track available, retrying in 2s...');
+      nowPlaying = null;
+      isPlaying = false;
+      io.emit('queueUpdate', { queue, nowPlaying });
+      return setTimeout(playNextSong, 2000);
+    }
+
+    nowPlaying = next;
+    isPlaying = true;
+
+    // Play the song on Spotify
+    try {
+      await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uris: [next.song] }),
+      });
+    } catch (err) {
+      console.warn('Failed to play song, maybe no active device:', err);
+      // Retry in 2s
+      return setTimeout(playNextSong, 2000);
+    }
+
     io.emit('queueUpdate', { queue, nowPlaying });
 
-    // Keep track of current track ID for polling
-    const lastTrackId = next.song.split(':')[2];
-
-    const poll = setInterval(async () => {
-      try {
-        const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        if (!player || !player.item) {
-          clearInterval(poll);
-          isPlaying = false;
-          nowPlaying = null;
-          io.emit('queueUpdate', { queue, nowPlaying });
-          return;
-        }
-
-        const currentTrackId = player.item.id;
-
-        // Move to next song when track changes
-        if (currentTrackId !== lastTrackId) {
-          clearInterval(poll);
-          playNextSong();
-        }
-
-      } catch (err) {
-        console.error('Polling error:', err);
-        clearInterval(poll);
-        isPlaying = false;
-        nowPlaying = null;
-        io.emit('queueUpdate', { queue, nowPlaying });
-      }
-    }, 2000);
+    // Start polling to detect when the track ends
+    pollCurrentTrack(next.song);
 
   } catch (err) {
-    console.error('Failed to play song:', err);
-    isPlaying = false;
+    console.error('playNextSong error:', err);
     nowPlaying = null;
+    isPlaying = false;
     io.emit('queueUpdate', { queue, nowPlaying });
+    setTimeout(playNextSong, 2000);
   }
+}
+
+function pollCurrentTrack(trackUri) {
+  // Prevent multiple polls
+  if (currentPoll) clearInterval(currentPoll);
+
+  currentPoll = setInterval(async () => {
+    try {
+      const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+      if (!player || !player.item || !player.is_playing) {
+        clearInterval(currentPoll);
+        nowPlaying = null;
+        isPlaying = false;
+        io.emit('queueUpdate', { queue, nowPlaying });
+        return;
+      }
+
+      const { uri, progress_ms, duration_ms } = player.item;
+
+      // Trigger next song when current ends
+      if (uri === trackUri && progress_ms >= duration_ms - 500) { // 500ms buffer
+        clearInterval(currentPoll);
+        playNextSong();
+      }
+
+    } catch (err) {
+      console.error('Polling error:', err);
+      clearInterval(currentPoll);
+      nowPlaying = null;
+      isPlaying = false;
+      io.emit('queueUpdate', { queue, nowPlaying });
+    }
+  }, 2000);
 }
 
 //get random unplayed track
