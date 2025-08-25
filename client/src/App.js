@@ -7,17 +7,29 @@ const API_URL = process.env.REACT_APP_API_URL;
 // Login Page Component
 // -------------------
 function LoginPage({ onSelectRole }) {
+  const handleHostLogin = () => {
+    const hostWindow = window.open(
+      `${API_URL}/login`,
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    // Poll localStorage to detect host login
+    const timer = setInterval(() => {
+      if (localStorage.getItem('hostLoggedIn') === 'true') {
+        onSelectRole('host');
+        clearInterval(timer);
+        hostWindow.close(); // optional: close login tab
+      }
+    }, 500);
+  };
+
   return (
     <div style={{ padding: 40, textAlign: 'center' }}>
       <h1>Welcome to Party Queue</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 20 }}>
-        <button
-          onClick={() =>
-            window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer')
-          }
-          style={{ marginRight: 20 }}
-        >
+        <button onClick={handleHostLogin} style={{ marginRight: 20 }}>
           Host (Spotify)
         </button>
         <button onClick={() => onSelectRole('guest')}>Guest</button>
@@ -66,9 +78,7 @@ function MainQueueApp({ role }) {
         const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
-        setQueue(
-          JSON.stringify(queue) !== JSON.stringify(data.queue) ? data.queue : queue
-        );
+        setQueue(JSON.stringify(queue) !== JSON.stringify(data.queue) ? data.queue : queue);
         setNowPlaying(
           JSON.stringify(nowPlaying) !== JSON.stringify(data.nowPlaying)
             ? normalizeNowPlaying(data.nowPlaying)
@@ -193,10 +203,7 @@ function MainQueueApp({ role }) {
                   {track.artists.join(', ')}
                 </div>
               </div>
-              <button
-                onClick={() => addSongToQueue(track)}
-                style={{ marginLeft: 10 }}
-              >
+              <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>
                 Select
               </button>
             </li>
@@ -250,8 +257,17 @@ function App() {
   const [role, setRole] = useState(null); // null = not selected yet
 
   useEffect(() => {
+    // Check query params for host login redirect
     const params = new URLSearchParams(window.location.search);
-    if (params.get('loggedIn')) {
+    if (params.get('loggedIn') === 'host') {
+      setRole('host');
+      localStorage.setItem('hostLoggedIn', 'true');
+      window.history.replaceState({}, '', '/'); // clean URL
+    }
+
+    // Check localStorage in case host tab logged in already
+    const hostLoggedIn = localStorage.getItem('hostLoggedIn');
+    if (hostLoggedIn === 'true') {
       setRole('host');
     }
   }, []);
