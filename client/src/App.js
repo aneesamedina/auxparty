@@ -34,32 +34,11 @@ function LoginPage({ onSelectRole }) {
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
         <button className="role-button host-button"
-          onClick={handleHostLogin} 
-        style={{ 
-          marginRight: 20,
-          padding: '15px 30px',
-          fontSize: 20,
-          borderRadius: 8,
-          cursor: 'pointer',
-          backgroundColor: '#707677ff',
-          color: '#fff',
-          border: 'none',
-        }}
-      >
+          onClick={handleHostLogin}>
           Host (Spotify)
         </button>
         <button className="role-button guest-button"
           onClick={() => onSelectRole('guest')}
-          style={{
-          padding: '15px 30px',
-          fontSize: 20,
-          borderRadius: 8,
-          cursor: 'pointer',
-          backgroundColor: '#1a2127ff',
-          color: '#fff',
-          border: 'none',
-
-        }}
           >Guest</button>
       </div>
        <style>
@@ -77,6 +56,12 @@ function LoginPage({ onSelectRole }) {
             border: none;
             color: #fff;
             transition: all 0.3s ease;
+          }
+          .host-button {
+            background-color: #ff4757;
+          }
+          .guest-button {
+            background-color: #1e90ff;
           }
           .role-button:hover {
             box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
