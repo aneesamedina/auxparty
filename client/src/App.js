@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
 // -------------------
 // Login Page Component
 // -------------------
-function LoginPage({ onSelectRole }) {
+function LoginPage() {
   return (
     <div style={{ padding: 40, textAlign: 'center' }}>
       <h1>Welcome to Party Queue</h1>
@@ -20,16 +21,18 @@ function LoginPage({ onSelectRole }) {
         >
           Host (Spotify)
         </button>
-        <button onClick={() => onSelectRole('guest')}>Guest</button>
+        <button onClick={() => (window.location.href = '/guest')}>
+          Guest
+        </button>
       </div>
     </div>
   );
 }
 
 // -------------------
-// Main Queue App Component
+// Main Queue Component
 // -------------------
-function MainQueueApp({ role }) {
+function QueuePage({ role }) {
   const [queue, setQueue] = useState([]);
   const [name, setName] = useState('');
   const [song, setSong] = useState('');
@@ -66,14 +69,8 @@ function MainQueueApp({ role }) {
         const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
-        setQueue(
-          JSON.stringify(queue) !== JSON.stringify(data.queue) ? data.queue : queue
-        );
-        setNowPlaying(
-          JSON.stringify(nowPlaying) !== JSON.stringify(data.nowPlaying)
-            ? normalizeNowPlaying(data.nowPlaying)
-            : nowPlaying
-        );
+        setQueue(data.queue);
+        setNowPlaying(normalizeNowPlaying(data.nowPlaying));
       } catch (err) {
         console.error('Error fetching queue:', err);
       }
@@ -82,7 +79,7 @@ function MainQueueApp({ role }) {
     fetchQueue();
     const interval = setInterval(fetchQueue, 3000);
     return () => clearInterval(interval);
-  }, [queue, nowPlaying]);
+  }, []);
 
   const searchSong = async () => {
     if (!search) return;
@@ -143,14 +140,9 @@ function MainQueueApp({ role }) {
     <div style={{ padding: 20 }}>
       <h1>Party Queue - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
-      {/* Host controls */}
       {role === 'host' && (
         <div style={{ marginBottom: 20 }}>
-          <a
-            href={`${API_URL}/login`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={`${API_URL}/login`} target="_blank" rel="noreferrer">
             Host Login (Spotify)
           </a>
           <button onClick={playNext} style={{ marginLeft: 10 }}>
@@ -159,7 +151,6 @@ function MainQueueApp({ role }) {
         </div>
       )}
 
-      {/* Add song */}
       <div style={{ marginBottom: 20 }}>
         <input
           placeholder="Your Name"
@@ -177,7 +168,6 @@ function MainQueueApp({ role }) {
         </button>
       </div>
 
-      {/* Search */}
       <div>
         <input
           placeholder="Search Spotify"
@@ -205,10 +195,7 @@ function MainQueueApp({ role }) {
                   {track.artists.join(', ')}
                 </div>
               </div>
-              <button
-                onClick={() => addSongToQueue(track)}
-                style={{ marginLeft: 10 }}
-              >
+              <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>
                 Select
               </button>
             </li>
@@ -216,7 +203,6 @@ function MainQueueApp({ role }) {
         </ul>
       </div>
 
-      {/* Now Playing */}
       <h2>Now Playing</h2>
       {nowPlaying && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
@@ -234,7 +220,6 @@ function MainQueueApp({ role }) {
         </div>
       )}
 
-      {/* Queue */}
       <h2>Queue</h2>
       <ul>
         {queue.map((item, index) => (
@@ -258,16 +243,19 @@ function MainQueueApp({ role }) {
 }
 
 // -------------------
-// Main App Component
+// Main App with Routes
 // -------------------
 function App() {
-  const [role, setRole] = useState(null); // null = not selected yet
-
-  if (!role) {
-    return <LoginPage onSelectRole={setRole} />;
-  }
-
-  return <MainQueueApp role={role} />;
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/guest" element={<QueuePage role="guest" />} />
+        <Route path="/host" element={<QueuePage role="host" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
 }
 
 export default App;
