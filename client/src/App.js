@@ -143,7 +143,7 @@ function MainQueueApp({ role }) {
       const res = await fetch(`${API_URL}/queue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addedBy: guestName, song }),
+        body: JSON.stringify({ name: guestName, song }),
         credentials: 'include',
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
