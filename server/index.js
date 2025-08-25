@@ -160,8 +160,9 @@ async function playNextSong() {
 
     nowPlaying = next;
     isPlaying = true;
+    io.emit('queueUpdate', { queue, nowPlaying });
 
-    // Play the song on Spotify
+    // Attempt to play
     try {
       await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
         method: 'PUT',
@@ -169,14 +170,12 @@ async function playNextSong() {
         body: JSON.stringify({ uris: [next.song] }),
       });
     } catch (err) {
-      console.warn('Failed to play song, maybe no active device:', err);
-      // Retry in 2s
+      console.warn('Failed to play song. No active device?', err);
+      // Retry after 2s
       return setTimeout(playNextSong, 2000);
     }
 
-    io.emit('queueUpdate', { queue, nowPlaying });
-
-    // Start polling to detect when the track ends
+    // Start polling to detect track end
     pollCurrentTrack(next.song);
 
   } catch (err) {
@@ -195,25 +194,21 @@ function pollCurrentTrack(trackUri) {
   currentPoll = setInterval(async () => {
     try {
       const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-      if (!player || !player.item || !player.is_playing) {
-        clearInterval(currentPoll);
-        nowPlaying = null;
-        isPlaying = false;
-        io.emit('queueUpdate', { queue, nowPlaying });
-        return;
-      }
+      if (!player || !player.item || !player.is_playing) return;
 
       const { uri, progress_ms, duration_ms } = player.item;
 
-      // Trigger next song when current ends
-      if (uri === trackUri && progress_ms >= duration_ms - 500) { // 500ms buffer
+      // If track finished
+      if (uri === trackUri && progress_ms >= duration_ms - 500) {
         clearInterval(currentPoll);
+        currentPoll = null;
         playNextSong();
       }
 
     } catch (err) {
       console.error('Polling error:', err);
       clearInterval(currentPoll);
+      currentPoll = null;
       nowPlaying = null;
       isPlaying = false;
       io.emit('queueUpdate', { queue, nowPlaying });
@@ -221,7 +216,6 @@ function pollCurrentTrack(trackUri) {
   }, 2000);
 }
 
-//get random unplayed track
 async function getRandomTrack() {
   if (!accessToken) throw new Error('Not authorized');
 
@@ -233,7 +227,7 @@ async function getRandomTrack() {
   const unplayed = data.items.filter(item => !playedTracks.has(item.track.id));
 
   if (unplayed.length === 0) {
-    playedTracks.clear(); // reset if all tracks have been played
+    playedTracks.clear(); // reset if all tracks played
     return getRandomTrack();
   }
 
@@ -248,7 +242,7 @@ async function getRandomTrack() {
       name: randomTrack.track.album.name,
       images: randomTrack.track.album.images
     },
-    addedBy: 'Auto' // indicates it’s from the default playlist
+    addedBy: 'Auto'
   };
 }
 
