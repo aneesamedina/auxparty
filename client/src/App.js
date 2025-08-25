@@ -160,7 +160,7 @@ function MainQueueApp({ role }) {
       setNowPlaying((prev) => prev || data.nowPlaying);
       setSong(''); // don't reset name anymore
       if (!localStorage.getItem("guestName")) {
-      localStorage.setItem("guestName", name);
+        localStorage.setItem("guestName", name);
       }
     } catch (err) {
       console.error('Error adding song:', err);
