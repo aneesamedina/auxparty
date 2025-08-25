@@ -137,22 +137,37 @@ app.post('/queue', async (req, res) => {
 async function playNextSong() {
   let next;
 
+  // Get next song from queue or random
   if (queue.length > 0) {
     next = queue.shift();
   } else {
-    next = await getRandomTrack(); // pull random song if queue empty
+    next = await getRandomTrack();
+  }
+
+  if (!next || !next.song) {
+    console.error('No next track available');
+    nowPlaying = null;
+    isPlaying = false;
+    io.emit('queueUpdate', { queue, nowPlaying });
+    return;
   }
 
   nowPlaying = next;
-  io.emit('queueUpdate', { queue, nowPlaying });
   isPlaying = true;
 
   try {
+    // Play the song on Spotify
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
+
+    // Emit updated queue/nowPlaying after successful play
+    io.emit('queueUpdate', { queue, nowPlaying });
+
+    // Keep track of current track ID for polling
+    const lastTrackId = next.song.split(':')[2];
 
     const poll = setInterval(async () => {
       try {
@@ -161,17 +176,24 @@ async function playNextSong() {
           clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
+          io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
-        if (!player.is_playing) {
+
+        const currentTrackId = player.item.id;
+
+        // Move to next song when track changes
+        if (currentTrackId !== lastTrackId) {
           clearInterval(poll);
-          playNextSong(); // automatically play next song or random
+          playNextSong();
         }
+
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
+        io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
 
@@ -179,6 +201,7 @@ async function playNextSong() {
     console.error('Failed to play song:', err);
     isPlaying = false;
     nowPlaying = null;
+    io.emit('queueUpdate', { queue, nowPlaying });
   }
 }
 
