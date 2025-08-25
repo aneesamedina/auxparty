@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
 // -------------------
 // Login Page Component
 // -------------------
-function LoginPage() {
+function LoginPage({ onSelectRole }) {
   return (
     <div style={{ padding: 40, textAlign: 'center' }}>
       <h1>Welcome to Party Queue</h1>
@@ -21,18 +20,16 @@ function LoginPage() {
         >
           Host (Spotify)
         </button>
-        <button onClick={() => (window.location.href = '/guest')}>
-          Guest
-        </button>
+        <button onClick={() => onSelectRole('guest')}>Guest</button>
       </div>
     </div>
   );
 }
 
 // -------------------
-// Main Queue Component
+// Main Queue App Component
 // -------------------
-function QueuePage({ role }) {
+function MainQueueApp({ role }) {
   const [queue, setQueue] = useState([]);
   const [name, setName] = useState('');
   const [song, setSong] = useState('');
@@ -69,8 +66,14 @@ function QueuePage({ role }) {
         const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
-        setQueue(data.queue);
-        setNowPlaying(normalizeNowPlaying(data.nowPlaying));
+        setQueue(
+          JSON.stringify(queue) !== JSON.stringify(data.queue) ? data.queue : queue
+        );
+        setNowPlaying(
+          JSON.stringify(nowPlaying) !== JSON.stringify(data.nowPlaying)
+            ? normalizeNowPlaying(data.nowPlaying)
+            : nowPlaying
+        );
       } catch (err) {
         console.error('Error fetching queue:', err);
       }
@@ -79,7 +82,7 @@ function QueuePage({ role }) {
     fetchQueue();
     const interval = setInterval(fetchQueue, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [queue, nowPlaying]);
 
   const searchSong = async () => {
     if (!search) return;
@@ -142,12 +145,7 @@ function QueuePage({ role }) {
 
       {role === 'host' && (
         <div style={{ marginBottom: 20 }}>
-          <a href={`${API_URL}/login`} target="_blank" rel="noreferrer">
-            Host Login (Spotify)
-          </a>
-          <button onClick={playNext} style={{ marginLeft: 10 }}>
-            Next Song
-          </button>
+          <button onClick={playNext}>Next Song</button>
         </div>
       )}
 
@@ -195,7 +193,10 @@ function QueuePage({ role }) {
                   {track.artists.join(', ')}
                 </div>
               </div>
-              <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>
+              <button
+                onClick={() => addSongToQueue(track)}
+                style={{ marginLeft: 10 }}
+              >
                 Select
               </button>
             </li>
@@ -243,19 +244,23 @@ function QueuePage({ role }) {
 }
 
 // -------------------
-// Main App with Routes
+// Main App Component
 // -------------------
 function App() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LoginPage />} />
-        <Route path="/guest" element={<QueuePage role="guest" />} />
-        <Route path="/host" element={<QueuePage role="host" />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
-  );
+  const [role, setRole] = useState(null); // null = not selected yet
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('loggedIn')) {
+      setRole('host');
+    }
+  }, []);
+
+  if (!role) {
+    return <LoginPage onSelectRole={setRole} />;
+  }
+
+  return <MainQueueApp role={role} />;
 }
 
 export default App;
