@@ -94,11 +94,6 @@ function MainQueueApp({ role }) {
     };
   };
 
-  // Save guest name to localStorage
-  useEffect(() => {
-    if (name) localStorage.setItem("guestName", name);
-  }, [name]);
-
   // --------------------------
   // Socket.IO for real-time updates
   useEffect(() => {
@@ -164,6 +159,9 @@ function MainQueueApp({ role }) {
       setQueue(data.queue);
       setNowPlaying((prev) => prev || data.nowPlaying);
       setSong(''); // don't reset name anymore
+      if (!localStorage.getItem("guestName")) {
+      localStorage.setItem("guestName", name);
+      }
     } catch (err) {
       console.error('Error adding song:', err);
     }
@@ -233,7 +231,7 @@ return (
       `}
     </style>
 
-    <h1>Party Queue - {role === 'guest' ? 'Guest' : 'Host'}</h1>
+    <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
     {role === 'host' && (
       <div style={{ marginBottom: 20 }}>
