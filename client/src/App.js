@@ -8,15 +8,13 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 function LoginPage({ onSelectRole }) {
   const handleHostLogin = () => {
-    // Open Spotify login in a new tab
     window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
-    // Immediately switch to host queue page
     onSelectRole('host');
   };
 
   return (
-    <div 
-      style={{ 
+    <div
+      style={{
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
@@ -33,42 +31,35 @@ function LoginPage({ onSelectRole }) {
       <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <button className="role-button host-button"
-          onClick={handleHostLogin}>
+        <button className="role-button host-button" onClick={handleHostLogin}>
           Host (Spotify)
         </button>
-        <button className="role-button guest-button"
-          onClick={() => onSelectRole('guest')}
-          >Guest</button>
+        <button className="role-button guest-button" onClick={() => onSelectRole('guest')}>
+          Guest
+        </button>
       </div>
-       <style>
-        {`
-          @keyframes gradientAnimation {
-            0%{background-position:0% 50%}
-            50%{background-position:100% 50%}
-            100%{background-position:0% 50%}
-          }
-          .role-button {
-            padding: 15px 30px;
-            font-size: 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            border: none;
-            color: #fff;
-            transition: all 0.3s ease;
-          }
-          .host-button {
-            background-color: #aaaaaaff;
-          }
-          .guest-button {
-            background-color: #303030ff;
-          }
-          .role-button:hover {
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
-            transform: scale(1.05);
-          }
-        `}
-      </style>
+      <style>{`
+        @keyframes gradientAnimation {
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
+        }
+        .role-button {
+          padding: 15px 30px;
+          font-size: 20px;
+          border-radius: 8px;
+          cursor: pointer;
+          border: none;
+          color: #fff;
+          transition: all 0.3s ease;
+        }
+        .host-button { background-color: #aaaaaaff; }
+        .guest-button { background-color: #303030ff; }
+        .role-button:hover {
+          box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+          transform: scale(1.05);
+        }
+      `}</style>
     </div>
   );
 }
@@ -79,6 +70,7 @@ function LoginPage({ onSelectRole }) {
 function MainQueueApp({ role }) {
   const [queue, setQueue] = useState([]);
   const [name, setName] = useState(() => localStorage.getItem("guestName") || "");
+  const [draftName, setDraftName] = useState(""); // temporary input
   const [song, setSong] = useState('');
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
@@ -98,17 +90,15 @@ function MainQueueApp({ role }) {
   // Socket.IO for real-time updates
   useEffect(() => {
     const socket = io(API_URL, { withCredentials: true });
-
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
-
     return () => socket.disconnect();
   }, []);
 
   // --------------------------
-  // Polling as fallback
+  // Polling fallback
   useEffect(() => {
     const fetchQueue = async () => {
       try {
@@ -125,7 +115,6 @@ function MainQueueApp({ role }) {
         console.error('Error fetching queue:', err);
       }
     };
-
     fetchQueue();
     const interval = setInterval(fetchQueue, 3000);
     return () => clearInterval(interval);
@@ -145,22 +134,27 @@ function MainQueueApp({ role }) {
     }
   };
 
+  // 🔹 Add song and save name if needed
   const addSong = async () => {
-    if (!name || !song) return alert('Enter name and Spotify URI');
+    const guestName = name || draftName.trim();
+    if (!guestName || !song) return alert("Enter name and a song URI");
+
     try {
       const res = await fetch(`${API_URL}/queue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, song }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: guestName, song }),
         credentials: 'include',
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setQueue(data.queue);
       setNowPlaying((prev) => prev || data.nowPlaying);
-      setSong(''); // don't reset name anymore
-      if (!localStorage.getItem("guestName")) {
-        localStorage.setItem("guestName", name);
+      setSong("");
+
+      if (!name) {
+        setName(guestName);
+        localStorage.setItem("guestName", guestName);
       }
     } catch (err) {
       console.error('Error adding song:', err);
@@ -188,25 +182,23 @@ function MainQueueApp({ role }) {
     }
   };
 
-return (
-  <div
-    style={{
-      minHeight: '100vh',
-      padding: 20,
-      background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
-      backgroundSize: '400% 400%',
-      animation: 'gradientAnimation 15s ease infinite',
-      color: '#fff',
-    }}
-  >
-    <style>
-      {`
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        padding: 20,
+        background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
+        backgroundSize: '400% 400%',
+        animation: 'gradientAnimation 15s ease infinite',
+        color: '#fff',
+      }}
+    >
+      <style>{`
         @keyframes gradientAnimation {
           0%{background-position:0% 50%}
           50%{background-position:100% 50%}
           100%{background-position:0% 50%}
         }
-
         .queue-button {
           padding: 12px 24px;
           font-size: 18px;
@@ -216,41 +208,34 @@ return (
           color: #fff;
           transition: all 0.3s ease;
         }
-
         .queue-button:hover {
           box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
           transform: scale(1.05);
         }
+        .host-button { background-color: #aaaaaaff; }
+        .guest-button { background-color: #303030ff; }
+      `}</style>
 
-        .host-button {
-          background-color: #aaaaaaff;
-        }
-        .guest-button {
-          background-color: #303030ff;
-        }
-      `}
-    </style>
+      <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
-    <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
-
-    {role === 'host' && (
-      <div style={{ marginBottom: 20 }}>
-        <button className="queue-button host-button" onClick={playNext}>
-          Next Song
-        </button>
-      </div>
-    )}
+      {role === 'host' && (
+        <div style={{ marginBottom: 20 }}>
+          <button className="queue-button host-button" onClick={playNext}>
+            Next Song
+          </button>
+        </div>
+      )}
 
       <div style={{ marginBottom: 20 }}>
         {!name && (
           <input
             placeholder="Your Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
           />
         )}
         {name && <span>👋 Welcome, {name}</span>}
-        
+
         <input
           placeholder="Spotify URI"
           value={song}
@@ -274,10 +259,7 @@ return (
 
         <ul>
           {results.map((track, idx) => (
-            <li
-              key={idx}
-              style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}
-            >
+            <li key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <img
                 src={track.album?.images[0]?.url}
                 alt={track.name}
@@ -289,10 +271,7 @@ return (
                   {track.artists.join(', ')}
                 </div>
               </div>
-              <button
-                onClick={() => addSongToQueue(track)}
-                style={{ marginLeft: 10 }}
-              >
+              <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>
                 Select
               </button>
             </li>
@@ -320,10 +299,7 @@ return (
       <h2>Queue</h2>
       <ul>
         {queue.map((item, index) => (
-          <li
-            key={index}
-            style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}
-          >
+          <li key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
             <img
               src={item.album?.images[0]?.url || ''}
               alt={item.trackName || item.song}
@@ -343,11 +319,9 @@ return (
 // Main App Component
 // -------------------
 function App() {
-  const [role, setRole] = useState(null); // null = not selected yet
+  const [role, setRole] = useState(null);
 
-  if (!role) {
-    return <LoginPage onSelectRole={setRole} />;
-  }
+  if (!role) return <LoginPage onSelectRole={setRole} />;
 
   return <MainQueueApp role={role} />;
 }
