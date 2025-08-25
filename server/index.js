@@ -112,7 +112,8 @@ app.get('/queue', (req, res) => {
 });
 
 app.post('/queue', async (req, res) => {
-  const { name, song: uri } = req.body;
+  const { name, addedBy, song: uri } = req.body;
+  const whoAdded = name || addedBy;
   if (!name || !uri) return res.status(400).json({ error: 'Missing name or song URI' });
 
   try {
@@ -157,7 +158,7 @@ async function playNextSong() {
     trackName: next.trackName, // this is the actual song name from Spotify
     song: next.song,           // URI
     artists: next.artists,     // array of artist names
-    addedBy: next.name,          // optional: the user who added it
+    addedBy: next.addedBy,          // optional: the user who added it
     album: next.album
   };
   io.emit('queueUpdate', { queue, nowPlaying });
