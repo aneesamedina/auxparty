@@ -16,7 +16,8 @@ function App() {
     return {
       trackName: np.trackName,
       artists: Array.isArray(np.artists) ? np.artists : [np.artists],
-      addedBy: np.addedBy || ''
+      addedBy: np.addedBy || '',
+      album: np.album
     };
   };
 
