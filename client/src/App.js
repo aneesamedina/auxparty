@@ -186,15 +186,58 @@ function MainQueueApp({ role }) {
     }
   };
 
-  return (
-    <div style={{ padding: 20 }}>
-      <h1>Party Queue - {role === 'guest' ? 'Guest' : 'Host'}</h1>
+return (
+  <div
+    style={{
+      minHeight: '100vh',
+      padding: 20,
+      background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
+      backgroundSize: '400% 400%',
+      animation: 'gradientAnimation 15s ease infinite',
+      color: '#fff',
+    }}
+  >
+    <style>
+      {`
+        @keyframes gradientAnimation {
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
+        }
 
-      {role === 'host' && (
-        <div style={{ marginBottom: 20 }}>
-          <button onClick={playNext}>Next Song</button>
-        </div>
-      )}
+        .queue-button {
+          padding: 12px 24px;
+          font-size: 18px;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          color: #fff;
+          transition: all 0.3s ease;
+        }
+
+        .queue-button:hover {
+          box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+          transform: scale(1.05);
+        }
+
+        .host-button {
+          background-color: #aaaaaaff;
+        }
+        .guest-button {
+          background-color: #303030ff;
+        }
+      `}
+    </style>
+
+    <h1>Party Queue - {role === 'guest' ? 'Guest' : 'Host'}</h1>
+
+    {role === 'host' && (
+      <div style={{ marginBottom: 20 }}>
+        <button className="queue-button host-button" onClick={playNext}>
+          Next Song
+        </button>
+      </div>
+    )}
 
       <div style={{ marginBottom: 20 }}>
         <input
