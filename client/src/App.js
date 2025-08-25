@@ -291,6 +291,7 @@ function MainQueueApp({ role }) {
             <div>{nowPlaying.trackName}</div>
             <div style={{ fontSize: 12, color: '#555' }}>
               {nowPlaying.artists.join(', ')}
+              {nowPlaying.addedBy && <p>Added by: {nowPlaying.addedBy}</p>}
             </div>
             
           </div>
@@ -308,9 +309,7 @@ function MainQueueApp({ role }) {
             />
             <div>
               <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
-              {item.addedBy && (
-                <div style={{ fontSize: 12, color: '#aaa' }}>Added by: {item.addedBy}</div>
-              )}
+              <div>{item.name && <span> (added by {item.name})</span>}</div>
             </div>
           </li>
         ))}
