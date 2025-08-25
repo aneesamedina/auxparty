@@ -112,8 +112,9 @@ app.get('/queue', (req, res) => {
 });
 
 app.post('/queue', async (req, res) => {
-  const { name, song: uri } = req.body;
-  if (!name || !uri) return res.status(400).json({ error: 'Missing name or song URI' });
+  const { name, addedBy, song: uri } = req.body;
+  const whoAdded = name || addedBy;
+  if (!whoAdded || !uri) return res.status(400).json({ error: 'Missing name or song URI' });
 
   try {
     const trackId = uri.split(':')[2];
