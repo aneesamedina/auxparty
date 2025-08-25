@@ -15,8 +15,22 @@ function LoginPage({ onSelectRole }) {
   };
 
   return (
-    <div style={{ padding: 40, textAlign: 'center' }}>
-      <h1>Welcome to Party Queue</h1>
+    <div 
+      style={{ 
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        textAlign: 'center',
+        padding: 40,
+        background: 'linear-gradient(135deg, #ff6b81, #feca57, #1dd1a1, #48dbfb)',
+        backgroundSize: '400% 400%',
+        animation: 'gradientAnimation 15s ease infinite',
+        color: '#fff',
+      }}
+    >
+      <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 20 }}>
         <button onClick={handleHostLogin} 
