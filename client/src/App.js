@@ -32,28 +32,30 @@ function LoginPage({ onSelectRole }) {
     >
       <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
-      <div style={{ marginTop: 20 }}>
-        <button onClick={handleHostLogin} 
+      <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <button className="role-button host-button"
+          onClick={handleHostLogin} 
         style={{ 
           marginRight: 20,
           padding: '15px 30px',
-          fontSize: 18,
+          fontSize: 20,
           borderRadius: 8,
           cursor: 'pointer',
-          backgroundColor: '#ff4757',
+          backgroundColor: '#707677ff',
           color: '#fff',
           border: 'none',
         }}
       >
           Host (Spotify)
         </button>
-        <button onClick={() => onSelectRole('guest')}
+        <button className="role-button guest-button"
+          onClick={() => onSelectRole('guest')}
           style={{
           padding: '15px 30px',
           fontSize: 20,
           borderRadius: 8,
           cursor: 'pointer',
-          backgroundColor: '#1e90ff',
+          backgroundColor: '#1a2127ff',
           color: '#fff',
           border: 'none',
 
@@ -66,6 +68,19 @@ function LoginPage({ onSelectRole }) {
             0%{background-position:0% 50%}
             50%{background-position:100% 50%}
             100%{background-position:0% 50%}
+          }
+          .role-button {
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            color: #fff;
+            transition: all 0.3s ease;
+          }
+          .role-button:hover {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+            transform: scale(1.05);
           }
         `}
       </style>
