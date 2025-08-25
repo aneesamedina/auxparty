@@ -199,21 +199,61 @@ function MainQueueApp({ role }) {
           50%{background-position:100% 50%}
           100%{background-position:0% 50%}
         }
-        .queue-button {
+
+        .queue-button, .role-button {
           padding: 12px 24px;
           font-size: 18px;
-          border-radius: 8px;
+          border-radius: 12px; /* slightly more rounded */
           border: none;
           cursor: pointer;
           color: #fff;
-          transition: all 0.3s ease;
+          transition: all 0.2s ease;
         }
-        .queue-button:hover {
-          box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+
+        .queue-button:hover, .role-button:hover {
           transform: scale(1.05);
+          box-shadow: 0 0 15px rgba(255,255,255,0.6);
+          filter: brightness(1.1);
         }
+
         .host-button { background-color: #aaaaaaff; }
         .guest-button { background-color: #303030ff; }
+
+        .song-input {
+          padding: 8px 12px;
+          font-size: 16px;
+          border-radius: 8px;
+          border: none;
+          margin-right: 8px;
+        }
+
+        .song-item {
+          display: flex;
+          align-items: center;
+          margin-bottom: 10px;
+          gap: 10px;
+        }
+
+        .song-item img {
+          width: 64px;
+          height: 64px;
+          border-radius: 8px;
+        }
+
+        .song-info {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .song-info .title {
+          font-weight: bold;
+          font-size: 16px;
+        }
+
+        .song-info .artists, .song-info .added-by {
+          font-size: 12px;
+          color: #eee;
+        }
       `}</style>
 
       <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
@@ -226,9 +266,10 @@ function MainQueueApp({ role }) {
         </div>
       )}
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
         {!name && (
           <input
+            className="song-input"
             placeholder="Your Name"
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
@@ -237,14 +278,22 @@ function MainQueueApp({ role }) {
         {name && <span>👋 Welcome, {name}</span>}
 
         <input
+          className="song-input"
           placeholder="Spotify URI"
           value={song}
           onChange={(e) => setSong(e.target.value)}
-          style={{ marginLeft: 10 }}
         />
-        <button onClick={addSong} style={{ marginLeft: 10 }}>
-          Add to Queue
-        </button>
+        <button className="queue-button host-button" onClick={addSong}>➕ Add to Queue</button>
+      </div>
+
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          className="song-input"
+          placeholder="Search Spotify"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
 
       <div>
@@ -257,26 +306,29 @@ function MainQueueApp({ role }) {
           Search
         </button>
 
-        <ul>
-          {results.map((track, idx) => (
-            <li key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <img
-                src={track.album?.images[0]?.url}
-                alt={track.name}
-                style={{ width: 64, height: 64, marginRight: 10 }}
-              />
-              <div>
-                <div>{track.name}</div>
-                <div style={{ fontSize: 12, color: '#555' }}>
-                  {track.artists.join(', ')}
-                </div>
-              </div>
-              <button onClick={() => addSongToQueue(track)} style={{ marginLeft: 10 }}>
-                Select
-              </button>
-            </li>
-          ))}
-        </ul>
+      <ul>
+        {results.map((track, idx) => (
+          <li key={idx} className="song-item">
+            <img src={track.album?.images[0]?.url} alt={track.name} />
+            <div className="song-info">
+              <div className="title">{track.name}</div>
+              <div className="artists">{track.artists.join(', ')}</div>
+            </div>
+            <button className="queue-button host-button" onClick={() => addSongToQueue(track)}>Select</button>
+          </li>
+        ))}
+
+        {queue.map((item, index) => (
+          <li key={index} className="song-item">
+            <img src={item.album?.images[0]?.url || ''} alt={item.trackName || item.song} />
+            <div className="song-info">
+              <div className="title">{item.trackName || item.song}</div>
+              <div className="artists">{item.artists.join(', ')}</div>
+              <div className="added-by">Added by {item.name}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
       </div>
 
       <h2>Now Playing</h2>
@@ -291,7 +343,7 @@ function MainQueueApp({ role }) {
             <div>{nowPlaying.trackName}</div>
             <div style={{ fontSize: 12, color: '#555' }}>
               {nowPlaying.artists.join(', ')}
-              {nowPlaying.addedBy && <p>Added by: {nowPlaying.addedBy}</p>}
+              {nowPlaying.addedBy && <p>Added by {nowPlaying.addedBy}</p>}
             </div>
             
           </div>
