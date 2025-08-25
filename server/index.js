@@ -11,6 +11,9 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
+let playedTracks = new Set();
+const DEFAULT_PLAYLIST_ID = process.env.DEFAULT_PLAYLIST_ID; // put your default playlist ID in .env
+
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
   credentials: true
@@ -132,21 +135,15 @@ app.post('/queue', async (req, res) => {
 
 // Play next song
 async function playNextSong() {
-  if (!queue.length) {
-    isPlaying = false;
-    nowPlaying = null;
-    return;
+  let next;
+
+  if (queue.length > 0) {
+    next = queue.shift();
+  } else {
+    next = await getRandomTrack(); // pull random song if queue empty
   }
 
-  const next = queue.shift();
-
-  nowPlaying = {
-    trackName: next.trackName, // this is the actual song name from Spotify
-    song: next.song,           // URI
-    artists: next.artists,     // array of artist names
-    addedBy: next.name,          // optional: the user who added it
-    album: next.album
-  };
+  nowPlaying = next;
   io.emit('queueUpdate', { queue, nowPlaying });
   isPlaying = true;
 
@@ -168,8 +165,7 @@ async function playNextSong() {
         }
         if (!player.is_playing) {
           clearInterval(poll);
-          if (queue.length) playNextSong();
-          else isPlaying = false;
+          playNextSong(); // automatically play next song or random
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -184,6 +180,37 @@ async function playNextSong() {
     isPlaying = false;
     nowPlaying = null;
   }
+}
+
+//get random unplayed track
+async function getRandomTrack() {
+  if (!accessToken) throw new Error('Not authorized');
+
+  const res = await fetch(`https://api.spotify.com/v1/playlists/${DEFAULT_PLAYLIST_ID}/tracks?limit=100`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const data = await res.json();
+  const unplayed = data.items.filter(item => !playedTracks.has(item.track.id));
+
+  if (unplayed.length === 0) {
+    playedTracks.clear(); // reset if all tracks have been played
+    return getRandomTrack();
+  }
+
+  const randomTrack = unplayed[Math.floor(Math.random() * unplayed.length)];
+  playedTracks.add(randomTrack.track.id);
+
+  return {
+    trackName: randomTrack.track.name,
+    song: randomTrack.track.uri,
+    artists: randomTrack.track.artists.map(a => a.name),
+    album: {
+      name: randomTrack.track.album.name,
+      images: randomTrack.track.album.images
+    },
+    addedBy: 'Auto' // indicates it’s from the default playlist
+  };
 }
 
 // Manual skip
