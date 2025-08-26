@@ -147,69 +147,53 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
-async function playNextSong() {
-  let next;
+let currentAutoplayUri = null;
+let isPlayingSong = false;
 
-  // 1️⃣ Determine next track
+async function playNextSong() {
+  if (isPlayingSong) return; // ignore if a song is already playing
+  isPlayingSong = true;
+
+  let next;
   if (queue.length > 0) {
     next = queue.shift();
+    currentAutoplayUri = null; // reset autoplay
   } else {
     next = await fetchAutoplaySong();
     if (!next) {
-      isPlaying = false;
+      isPlayingSong = false;
       nowPlaying = null;
       io.emit('queueUpdate', { queue, nowPlaying });
       return;
     }
+    currentAutoplayUri = next.song;
+    autoplayIndex++; // increment only now
   }
 
-  // 2️⃣ Update state
-  nowPlaying = {
-    trackName: next.trackName,
-    song: next.song,
-    artists: next.artists,
-    addedBy: next.name,
-    album: next.album
-  };
-  isPlaying = true;
+  nowPlaying = { /* ... */ };
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // 3️⃣ Play song on Spotify
-  try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [next.song] }),
-    });
+  // Play on Spotify
+  await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uris: [next.song] }),
+  });
 
-    const currentUri = next.song; // Track the song we just started
+  // Polling
+  const poll = setInterval(async () => {
+    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+    if (!player?.item) return;
 
-    // 4️⃣ Poll Spotify to detect song end
-    const poll = setInterval(async () => {
-      try {
-        const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        if (!player || !player.item) return; // Wait until player info is available
+    const progress = player.progress_ms;
+    const duration = player.item.duration_ms;
 
-        const progress = player.progress_ms;
-        const duration = player.item.duration_ms;
-
-        // Only move to next song if current song ended or changed
-        if (!player.is_playing || player.item.uri !== currentUri || progress >= duration - 1000) {
-          clearInterval(poll);
-          playNextSong();
-        }
-      } catch (err) {
-        console.error('Polling error:', err);
-        clearInterval(poll);
-      }
-    }, 2000);
-
-  } catch (err) {
-    console.error('Failed to play song:', err);
-    isPlaying = false;
-    nowPlaying = null;
-    io.emit('queueUpdate', { queue, nowPlaying });
-  }
+    if (!player.is_playing || player.item.uri !== next.song || progress >= duration - 1000) {
+      clearInterval(poll);
+      isPlayingSong = false;
+      playNextSong();
+    }
+  }, 2000);
 }
 
 // Manual skip
