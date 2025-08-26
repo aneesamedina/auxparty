@@ -181,7 +181,9 @@ async function playNextSong() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
-    autoplayIndex++;
+    setTimeout(() => {
+      autoplayIndex++;
+    }, 2000);
 
     // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
@@ -199,7 +201,7 @@ async function playNextSong() {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing && progress >= duration - 3000) {
+        if (progress >= duration - 1000) {
           console.log(`[End Detection] Detected stopped & near end`);
           clearInterval(poll);
           playNextSong();
