@@ -13,6 +13,9 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
+const playlist_id = process.env.AUTOPLAY_PLAYLIST_ID; // replace with your playlist ID
+let autoplayIndex = 0; // keeps track of which song to play next in autoplay
+
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
   credentials: true
@@ -145,19 +148,25 @@ app.post('/queue', async (req, res) => {
 
 // Play next song
 async function playNextSong() {
-  if (!queue.length) {
-    isPlaying = false;
-    nowPlaying = null;
-    return;
+  let next;
+
+  if (queue.length) {
+    next = queue.shift();
+  } else {
+    next = await fetchAutoplaySong();
+    if (!next) {
+      isPlaying = false;
+      nowPlaying = null;
+      io.emit('queueUpdate', { queue, nowPlaying });
+      return;
+    }
   }
 
-  const next = queue.shift();
-
   nowPlaying = {
-    trackName: next.trackName, // this is the actual song name from Spotify
-    song: next.song,           // URI
-    artists: next.artists,     // array of artist names
-    addedBy: next.name,          // optional: the user who added it
+    trackName: next.trackName,
+    song: next.song,
+    artists: next.artists,
+    addedBy: next.name,
     album: next.album
   };
   io.emit('queueUpdate', { queue, nowPlaying });
@@ -181,8 +190,7 @@ async function playNextSong() {
         }
         if (!player.is_playing) {
           clearInterval(poll);
-          if (queue.length) playNextSong();
-          else isPlaying = false;
+          playNextSong();
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -232,6 +240,32 @@ app.get('/search', async (req, res) => {
     res.status(500).json({ error: 'Failed to search Spotify' });
   }
 });
+
+
+async function fetchAutoplaySong() {
+  try {
+    const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
+    if (!data.items || data.items.length === 0) return null;
+
+    const track = data.items[autoplayIndex % data.items.length].track;
+    autoplayIndex++;
+
+    return {
+      name: 'Autoplay',
+      song: track.uri,
+      trackName: track.name,
+      artists: track.artists.map(a => a.name),
+      album: {
+        name: track.album.name,
+        images: track.album.images
+      }
+    };
+  } catch (err) {
+    console.error('Failed to fetch autoplay song:', err);
+    return null;
+  }
+}
+
 
 const http = require('http');
 const { Server } = require('socket.io');
