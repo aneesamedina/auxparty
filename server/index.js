@@ -181,7 +181,8 @@ async function playNextSong() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
-
+    autoplayIndex++;
+    
     // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
@@ -261,7 +262,6 @@ async function fetchAutoplaySong() {
     if (!data.items || data.items.length === 0) return null;
 
     const track = data.items[autoplayIndex % data.items.length].track;
-    autoplayIndex++;
 
     return {
       name: 'Autoplay',
