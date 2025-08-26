@@ -147,14 +147,10 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
-let pollInterval = null; // track the polling interval
-let isAdvancing = false;
 async function playNextSong() {
-  if (isAdvancing) return; // prevent multiple simultaneous calls
-  isAdvancing = true;
-
   let next;
 
+  // 1️⃣ Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -163,11 +159,11 @@ async function playNextSong() {
       isPlaying = false;
       nowPlaying = null;
       io.emit('queueUpdate', { queue, nowPlaying });
-      isAdvancing = false;
       return;
     }
   }
 
+  // 2️⃣ Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -178,8 +174,7 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  if (pollInterval) clearInterval(pollInterval);
-
+  // 3️⃣ Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -187,33 +182,33 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    pollInterval = setInterval(async () => {
+    // 4️⃣ Poll Spotify to detect song end
+    const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+        console.log(player);
         if (!player || !player.item) {
-          clearInterval(pollInterval);
+          clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
           io.emit('queueUpdate', { queue, nowPlaying });
-          isAdvancing = false;
           return;
         }
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 5000) { // 5s buffer
-          clearInterval(pollInterval);
-          isAdvancing = false;
+        if (!player.is_playing || progress >= duration - 1000) {
+          clearInterval(poll);
+          // Automatically play next track
           playNextSong();
         }
       } catch (err) {
         console.error('Polling error:', err);
-        clearInterval(pollInterval);
+        clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
         io.emit('queueUpdate', { queue, nowPlaying });
-        isAdvancing = false;
       }
     }, 2000);
 
@@ -222,14 +217,12 @@ async function playNextSong() {
     isPlaying = false;
     nowPlaying = null;
     io.emit('queueUpdate', { queue, nowPlaying });
-    isAdvancing = false;
   }
 }
 
 // Manual skip
 app.post('/play', async (req, res) => {
   try {
-    if (pollInterval) clearInterval(pollInterval); // stop old poll
     await playNextSong();
     res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
