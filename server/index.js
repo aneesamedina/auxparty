@@ -182,7 +182,7 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
     autoplayIndex++;
-    
+
     // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
@@ -199,9 +199,9 @@ async function playNextSong() {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        if (!player.is_playing && progress >= duration - 3000) {
+          console.log(`[End Detection] Detected stopped & near end`);
           clearInterval(poll);
-          // Automatically play next track
           playNextSong();
         }
       } catch (err) {
