@@ -18,7 +18,7 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 let autoplayIndex = 0;
-let pollInterval = null;
+let pollInterval = null; // ✅ prevent duplicate polling
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -178,6 +178,7 @@ async function playNextSong() {
     let lastProgress = 0;
     let lastTrackId = null;
 
+    // ✅ clear previous polling loop if any
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
@@ -201,8 +202,13 @@ async function playNextSong() {
         const duration = player.item.duration_ms;
         const isPlayingNow = player.is_playing;
 
-        // ✅ Detect manual skip
-        if (lastTrackId && currentTrackId !== lastTrackId) {
+        // Move lastTrackId assignment here *before* checks to avoid false positives
+        if (lastTrackId === null) {
+          lastTrackId = currentTrackId;
+        }
+
+        // Detect manual skip only if lastProgress > 0 (skip false on first poll)
+        if (lastTrackId !== currentTrackId && lastProgress > 0) {
           console.log(`[Track Changed Manually or Skipped]`);
           clearInterval(pollInterval);
           pollInterval = null;
@@ -210,7 +216,6 @@ async function playNextSong() {
           return;
         }
 
-        // ✅ Detect manual pause near end
         if (!isPlayingNow && progress >= duration - 5000) {
           console.log(`[Paused Near End — Skipping to Next]`);
           clearInterval(pollInterval);
@@ -219,7 +224,6 @@ async function playNextSong() {
           return;
         }
 
-        // ✅ Detect natural end
         if (progress >= duration - 1000) {
           console.log(`[End Detection] Natural end of song`);
           clearInterval(pollInterval);
