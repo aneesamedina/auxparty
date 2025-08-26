@@ -182,12 +182,11 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    autoplayIndex++;
-
     // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+        console.log(player);
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
@@ -199,10 +198,9 @@ async function playNextSong() {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        // 🔁 Check for end-of-track
-        if (!player.is_playing && progress >= duration - 3000) {
-          console.log(`[End Detection] Detected stopped & near end`);
+        if (!player.is_playing || progress >= duration - 1000) {
           clearInterval(poll);
+          // Automatically play next track
           playNextSong();
         }
       } catch (err) {
@@ -263,6 +261,7 @@ async function fetchAutoplaySong() {
     if (!data.items || data.items.length === 0) return null;
 
     const track = data.items[autoplayIndex % data.items.length].track;
+    autoplayIndex++;
 
     return {
       name: 'Autoplay',
