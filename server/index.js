@@ -147,8 +147,6 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
-let currentAutoplayUri = null;
-let isPlayingSong = false;
 
 async function playNextSong() {
   if (isPlayingSong) return; // ignore if a song is already playing
@@ -237,7 +235,6 @@ async function fetchAutoplaySong() {
     if (!data.items || data.items.length === 0) return null;
 
     const track = data.items[autoplayIndex % data.items.length].track;
-    autoplayIndex++;
 
     return {
       name: 'Autoplay',
