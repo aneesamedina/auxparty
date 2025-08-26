@@ -18,7 +18,7 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 let autoplayIndex = 0;
-let pollInterval = null; // ✅ prevent duplicate polling
+let pollInterval = null;
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -178,7 +178,6 @@ async function playNextSong() {
     let lastProgress = 0;
     let lastTrackId = null;
 
-    // ✅ clear previous polling loop if any
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
@@ -202,33 +201,31 @@ async function playNextSong() {
         const duration = player.item.duration_ms;
         const isPlayingNow = player.is_playing;
 
+        // ✅ Detect manual skip
         if (lastTrackId && currentTrackId !== lastTrackId) {
-          console.log(`[End Detection] Track changed`);
+          console.log(`[Track Changed Manually or Skipped]`);
           clearInterval(pollInterval);
           pollInterval = null;
           playNextSong();
           return;
         }
 
+        // ✅ Detect manual pause near end
+        if (!isPlayingNow && progress >= duration - 5000) {
+          console.log(`[Paused Near End — Skipping to Next]`);
+          clearInterval(pollInterval);
+          pollInterval = null;
+          playNextSong();
+          return;
+        }
+
+        // ✅ Detect natural end
         if (progress >= duration - 1000) {
           console.log(`[End Detection] Natural end of song`);
           clearInterval(pollInterval);
           pollInterval = null;
           playNextSong();
           return;
-        }
-
-        if ((progress > lastProgress && progress >= duration - 5000) ||
-            (!isPlayingNow && progress >= duration - 5000)) {
-          console.log(`[End Detection] User seeked near end or paused near end`);
-          clearInterval(pollInterval);
-          pollInterval = null;
-          playNextSong();
-          return;
-        }
-
-        if (progress < lastProgress) {
-          console.log(`[Seek Detected] Progress jumped back (user seek?)`);
         }
 
         lastProgress = progress;
