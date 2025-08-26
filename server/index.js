@@ -182,33 +182,25 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
+    const currentUri = next.song; // Track the song we just started
+
     // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        console.log(player);
-        if (!player || !player.item) {
-          clearInterval(poll);
-          isPlaying = false;
-          nowPlaying = null;
-          io.emit('queueUpdate', { queue, nowPlaying });
-          return;
-        }
+        if (!player || !player.item) return; // Wait until player info is available
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        // Only move to next song if current song ended or changed
+        if (!player.is_playing || player.item.uri !== currentUri || progress >= duration - 1000) {
           clearInterval(poll);
-          // Automatically play next track
           playNextSong();
         }
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
-        isPlaying = false;
-        nowPlaying = null;
-        io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
 
