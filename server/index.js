@@ -13,7 +13,7 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
-const playlist_id = process.env.AUTOPLAY_PLAYLIST_ID; // replace with your playlist ID
+const playlist_id = 'spotify:playlist:6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
 let autoplayIndex = 0; // keeps track of which song to play next in autoplay
 
 app.use(cors({
@@ -150,7 +150,8 @@ app.post('/queue', async (req, res) => {
 async function playNextSong() {
   let next;
 
-  if (queue.length) {
+  // 1️⃣ Determine next track
+  if (queue.length > 0) {
     next = queue.shift();
   } else {
     next = await fetchAutoplaySong();
@@ -162,6 +163,7 @@ async function playNextSong() {
     }
   }
 
+  // 2️⃣ Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -169,9 +171,10 @@ async function playNextSong() {
     addedBy: next.name,
     album: next.album
   };
-  io.emit('queueUpdate', { queue, nowPlaying });
   isPlaying = true;
+  io.emit('queueUpdate', { queue, nowPlaying });
 
+  // 3️⃣ Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -179,17 +182,25 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
+    // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+        console.log(player);
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
+          io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
-        if (!player.is_playing) {
+
+        const progress = player.progress_ms;
+        const duration = player.item.duration_ms;
+
+        if (!player.is_playing || progress >= duration - 1000) {
           clearInterval(poll);
+          // Automatically play next track
           playNextSong();
         }
       } catch (err) {
@@ -197,6 +208,7 @@ async function playNextSong() {
         clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
+        io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
 
@@ -204,6 +216,7 @@ async function playNextSong() {
     console.error('Failed to play song:', err);
     isPlaying = false;
     nowPlaying = null;
+    io.emit('queueUpdate', { queue, nowPlaying });
   }
 }
 
