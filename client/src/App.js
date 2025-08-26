@@ -151,6 +151,9 @@ function MainQueueApp({ role }) {
       setQueue(data.queue);
       setNowPlaying((prev) => prev || data.nowPlaying);
 
+      setResults([]);
+      setSearch('');
+
       if (!name) {
         setName(guestName);
         localStorage.setItem("guestName", guestName);
