@@ -13,7 +13,7 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
-const playlist_id = 'spotify:playlist:6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
+const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
 let autoplayIndex = 0; // keeps track of which song to play next in autoplay
 
 app.use(cors({
