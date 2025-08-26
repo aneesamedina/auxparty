@@ -148,11 +148,13 @@ app.post('/queue', async (req, res) => {
 
 // Play next song
 let pollInterval = null; // track the polling interval
-
+let isAdvancing = false;
 async function playNextSong() {
+  if (isAdvancing) return; // prevent multiple simultaneous calls
+  isAdvancing = true;
+
   let next;
 
-  // Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -161,11 +163,11 @@ async function playNextSong() {
       isPlaying = false;
       nowPlaying = null;
       io.emit('queueUpdate', { queue, nowPlaying });
+      isAdvancing = false;
       return;
     }
   }
 
-  // Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -176,10 +178,8 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // Stop any existing poll
   if (pollInterval) clearInterval(pollInterval);
 
-  // Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -187,7 +187,6 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // Poll Spotify to detect song end
     pollInterval = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -196,14 +195,16 @@ async function playNextSong() {
           isPlaying = false;
           nowPlaying = null;
           io.emit('queueUpdate', { queue, nowPlaying });
+          isAdvancing = false;
           return;
         }
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        if (!player.is_playing || progress >= duration - 5000) { // 5s buffer
           clearInterval(pollInterval);
+          isAdvancing = false;
           playNextSong();
         }
       } catch (err) {
@@ -212,6 +213,7 @@ async function playNextSong() {
         isPlaying = false;
         nowPlaying = null;
         io.emit('queueUpdate', { queue, nowPlaying });
+        isAdvancing = false;
       }
     }, 2000);
 
@@ -220,6 +222,7 @@ async function playNextSong() {
     isPlaying = false;
     nowPlaying = null;
     io.emit('queueUpdate', { queue, nowPlaying });
+    isAdvancing = false;
   }
 }
 
