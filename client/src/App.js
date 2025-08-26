@@ -135,29 +135,28 @@ function MainQueueApp({ role }) {
   };
 
   // 🔹 Add song and save name if needed
-  const addSong = async () => {
+  const addSong = async (track) => {
     const guestName = name || draftName.trim();
-    if (!guestName || !song) return alert("Enter name and a song URI");
+    if (!guestName || !track) return alert("Enter your name first");
 
     try {
       const res = await fetch(`${API_URL}/queue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: guestName, song }),
-        credentials: 'include',
+        body: JSON.stringify({ name: guestName, song: track.uri }),
+        credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setQueue(data.queue);
       setNowPlaying((prev) => prev || data.nowPlaying);
-      setSong("");
 
       if (!name) {
         setName(guestName);
         localStorage.setItem("guestName", guestName);
       }
     } catch (err) {
-      console.error('Error adding song:', err);
+      console.error("Error adding song:", err);
     }
   };
 
@@ -276,14 +275,6 @@ function MainQueueApp({ role }) {
           />
         )}
         <div>{name && <span>👋 Welcome, {name}</span>}</div>
-
-        <input
-          className="song-input"
-          placeholder="Spotify URI"
-          value={song}
-          onChange={(e) => setSong(e.target.value)}
-        />
-        <button className="queue-button host-button" onClick={addSong}>➕ Add to Queue</button>
       </div>
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -305,7 +296,7 @@ function MainQueueApp({ role }) {
               <div className="title">{track.name}</div>
               <div className="artists">{track.artists.join(', ')}</div>
             </div>
-            <button className="queue-button host-button" onClick={() => addSongToQueue(track)}>Select</button>
+            <button className="queue-button host-button" onClick={() => addSong(track)}>➕ Add to Queue</button>
           </li>
         ))}
       </ul>
