@@ -28,8 +28,6 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
-let pollInterval = null; // <-- Added global polling interval variable
-
 // Spotify Auth
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
@@ -184,16 +182,15 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // Clear any existing polling interval before starting new one
+    let lastProgress = 0;
+    let lastTrackId = null;
+
+    // ✅ clear previous polling loop if any
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
     }
 
-    let lastProgress = 0;
-    let lastTrackId = null;
-
-    // 4️⃣ Poll Spotify to detect song end, skips, pauses, or seeks
     pollInterval = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -215,25 +212,33 @@ async function playNextSong() {
         // Detect external track change (skip)
         if (lastTrackId && currentTrackId !== lastTrackId) {
           console.log('[End Detection] Track changed externally (skip detected)');
+
+          // Resume playback if paused after skip
+          if (!isPlayingNow) {
+            console.log('Playback paused after skip, resuming playback...');
+            await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uris: [player.item.uri] }),
+            });
+          }
+
           clearInterval(pollInterval);
           pollInterval = null;
           playNextSong();
           return;
         }
 
-        // Detect natural end
         if (progress >= duration - 1000) {
-          console.log('[End Detection] Song ended naturally');
+          console.log('[End Detection] Natural end of song');
           clearInterval(pollInterval);
           pollInterval = null;
           playNextSong();
           return;
         }
 
-        // Detect paused or seek near end to avoid stuck playback
-        if ((progress > lastProgress && progress >= duration - 5000) ||
-            (!isPlayingNow && progress >= duration - 5000)) {
-          console.log('[End Detection] Paused or seeked near end');
+        if (!isPlayingNow && progress >= duration - 5000) {
+          console.log('[End Detection] Playback paused near end');
           clearInterval(pollInterval);
           pollInterval = null;
           playNextSong();
@@ -241,7 +246,7 @@ async function playNextSong() {
         }
 
         if (progress < lastProgress) {
-          console.log('[Seek Detected] Progress jumped backwards');
+          console.log('[Seek Detected] Progress jumped back (user seek?)');
         }
 
         lastProgress = progress;
@@ -299,7 +304,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-
 async function fetchAutoplaySong() {
   try {
     const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
@@ -323,7 +327,6 @@ async function fetchAutoplaySong() {
     return null;
   }
 }
-
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -349,6 +352,8 @@ io.on('connection', (socket) => {
   socket.emit('queueUpdate', { queue, nowPlaying });
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
+
+let pollInterval = null; // moved pollInterval here to be accessible in playNextSong
 
 // Replace app.listen with server.listen
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
