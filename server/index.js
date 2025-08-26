@@ -181,15 +181,13 @@ async function playNextSong() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
-    setTimeout(() => {
-      autoplayIndex++;
-    }, 2000);
+
+    autoplayIndex++;
 
     // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        console.log(player);
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
@@ -201,7 +199,8 @@ async function playNextSong() {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (progress >= duration - 1000) {
+        // 🔁 Check for end-of-track
+        if (!player.is_playing && progress >= duration - 3000) {
           console.log(`[End Detection] Detected stopped & near end`);
           clearInterval(poll);
           playNextSong();
