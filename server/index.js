@@ -28,6 +28,8 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
+let lastTrackId = null; // Persist last track ID to detect manual skips
+
 // Spotify Auth
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
@@ -174,7 +176,9 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // 3️⃣ Play song on Spotify
+  // Extract track ID from URI
+  const trackId = next.song.split(':')[2];
+
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -182,9 +186,10 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // 4️⃣ Poll Spotify to detect song end or manual skip
-    let lastTrackId = null;
+    // Set lastTrackId immediately to prevent false manual skip detection
+    lastTrackId = trackId;
 
+    // 3️⃣ Poll Spotify to detect song end or manual skip
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -202,9 +207,29 @@ async function playNextSong() {
 
         // Detect manual skip (track changed)
         if (lastTrackId && currentTrackId !== lastTrackId) {
-          console.log(`[Track Changed] Detected manual skip or next button`);
+          console.log(`[Track Changed] Manual skip detected`);
+
+          // Update nowPlaying with Spotify's actual current track
+          nowPlaying = {
+            trackName: player.item.name,
+            song: player.item.uri,
+            artists: player.item.artists.map(a => a.name),
+            addedBy: 'Spotify User (manual skip)',
+            album: {
+              name: player.item.album.name,
+              images: player.item.album.images,
+            }
+          };
+          isPlaying = true;
+          io.emit('queueUpdate', { queue, nowPlaying });
+
+          lastTrackId = currentTrackId;
           clearInterval(poll);
-          playNextSong();
+
+          // Optional: if you want to forcibly move to your queue's next track,
+          // you can uncomment the line below:
+          // await playNextSong();
+
           return;
         }
 
