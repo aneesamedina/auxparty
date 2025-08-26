@@ -202,22 +202,8 @@ async function playNextSong() {
         const duration = player.item.duration_ms;
         const isPlayingNow = player.is_playing;
 
-        // Move lastTrackId assignment here *before* checks to avoid false positives
-        if (lastTrackId === null) {
-          lastTrackId = currentTrackId;
-        }
-
-        // Detect manual skip only if lastProgress > 0 (skip false on first poll)
-        if (lastTrackId !== currentTrackId && lastProgress > 0) {
-          console.log(`[Track Changed Manually or Skipped]`);
-          clearInterval(pollInterval);
-          pollInterval = null;
-          playNextSong();
-          return;
-        }
-
-        if (!isPlayingNow && progress >= duration - 5000) {
-          console.log(`[Paused Near End — Skipping to Next]`);
+        if (lastTrackId && currentTrackId !== lastTrackId) {
+          console.log(`[End Detection] Track changed`);
           clearInterval(pollInterval);
           pollInterval = null;
           playNextSong();
@@ -230,6 +216,19 @@ async function playNextSong() {
           pollInterval = null;
           playNextSong();
           return;
+        }
+
+        if ((progress > lastProgress && progress >= duration - 5000) ||
+            (!isPlayingNow && progress >= duration - 5000)) {
+          console.log(`[End Detection] User seeked near end or paused near end`);
+          clearInterval(pollInterval);
+          pollInterval = null;
+          playNextSong();
+          return;
+        }
+
+        if (progress < lastProgress) {
+          console.log(`[Seek Detected] Progress jumped back (user seek?)`);
         }
 
         lastProgress = progress;
