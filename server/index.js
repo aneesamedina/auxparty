@@ -147,51 +147,77 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
-
 async function playNextSong() {
-  if (isPlayingSong) return; // ignore if a song is already playing
-  isPlayingSong = true;
-
   let next;
+
+  // 1️⃣ Determine next track
   if (queue.length > 0) {
     next = queue.shift();
-    currentAutoplayUri = null; // reset autoplay
   } else {
     next = await fetchAutoplaySong();
     if (!next) {
-      isPlayingSong = false;
+      isPlaying = false;
       nowPlaying = null;
       io.emit('queueUpdate', { queue, nowPlaying });
       return;
     }
-    currentAutoplayUri = next.song;
-    autoplayIndex++; // increment only now
   }
 
-  nowPlaying = { /* ... */ };
+  // 2️⃣ Update state
+  nowPlaying = {
+    trackName: next.trackName,
+    song: next.song,
+    artists: next.artists,
+    addedBy: next.name,
+    album: next.album
+  };
+  isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // Play on Spotify
-  await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uris: [next.song] }),
-  });
+  // 3️⃣ Play song on Spotify
+  try {
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: [next.song] }),
+    });
 
-  // Polling
-  const poll = setInterval(async () => {
-    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-    if (!player?.item) return;
+    // 4️⃣ Poll Spotify to detect song end
+    const poll = setInterval(async () => {
+      try {
+        const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+        console.log(player);
+        if (!player || !player.item) {
+          clearInterval(poll);
+          isPlaying = false;
+          nowPlaying = null;
+          io.emit('queueUpdate', { queue, nowPlaying });
+          return;
+        }
 
-    const progress = player.progress_ms;
-    const duration = player.item.duration_ms;
+        const progress = player.progress_ms;
+        const duration = player.item.duration_ms;
 
-    if (!player.is_playing || player.item.uri !== next.song || progress >= duration - 1000) {
-      clearInterval(poll);
-      isPlayingSong = false;
-      playNextSong();
-    }
-  }, 2000);
+        if (!player.is_playing || progress >= duration - 1000) {
+          clearInterval(poll);
+          // Automatically play next track
+          playNextSong();
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        clearInterval(poll);
+        isPlaying = false;
+        nowPlaying = null;
+        io.emit('queueUpdate', { queue, nowPlaying });
+      }
+    }, 2000);
+
+  } catch (err) {
+    console.error('Failed to play song:', err);
+    isPlaying = false;
+    nowPlaying = null;
+    io.emit('queueUpdate', { queue, nowPlaying });
+  }
 }
 
 // Manual skip
@@ -235,6 +261,7 @@ async function fetchAutoplaySong() {
     if (!data.items || data.items.length === 0) return null;
 
     const track = data.items[autoplayIndex % data.items.length].track;
+    autoplayIndex++;
 
     return {
       name: 'Autoplay',
