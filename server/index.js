@@ -182,11 +182,14 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // 4️⃣ Poll Spotify to detect song end
+    // 4️⃣ Poll Spotify to detect song end or change
+    let lastProgress = 0;
+    let lastTrackId = null;
+
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        console.log(player);
+
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
@@ -195,14 +198,34 @@ async function playNextSong() {
           return;
         }
 
+        const currentTrackId = player.item.id;
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        // Detect track change (e.g. user skips manually or autoplay triggers)
+        if (lastTrackId && currentTrackId !== lastTrackId) {
+          console.log(`[End Detection] Track changed`);
           clearInterval(poll);
-          // Automatically play next track
           playNextSong();
+          return;
         }
+
+        // Detect natural end
+        if (progress >= duration - 1000) {
+          console.log(`[End Detection] Natural end of song`);
+          clearInterval(poll);
+          playNextSong();
+          return;
+        }
+
+        // Optional: Log manual seek
+        if (progress < lastProgress) {
+          console.log(`[Seek Detected] Progress jumped back (user seek?)`);
+        }
+
+        lastProgress = progress;
+        lastTrackId = currentTrackId;
+
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
