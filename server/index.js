@@ -147,10 +147,12 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
+let pollInterval = null; // track the polling interval
+
 async function playNextSong() {
   let next;
 
-  // 1️⃣ Determine next track
+  // Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -163,7 +165,7 @@ async function playNextSong() {
     }
   }
 
-  // 2️⃣ Update state
+  // Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -174,7 +176,10 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // 3️⃣ Play song on Spotify
+  // Stop any existing poll
+  if (pollInterval) clearInterval(pollInterval);
+
+  // Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -182,13 +187,12 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // 4️⃣ Poll Spotify to detect song end
-    const poll = setInterval(async () => {
+    // Poll Spotify to detect song end
+    pollInterval = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        console.log(player);
         if (!player || !player.item) {
-          clearInterval(poll);
+          clearInterval(pollInterval);
           isPlaying = false;
           nowPlaying = null;
           io.emit('queueUpdate', { queue, nowPlaying });
@@ -199,13 +203,12 @@ async function playNextSong() {
         const duration = player.item.duration_ms;
 
         if (!player.is_playing || progress >= duration - 1000) {
-          clearInterval(poll);
-          // Automatically play next track
+          clearInterval(pollInterval);
           playNextSong();
         }
       } catch (err) {
         console.error('Polling error:', err);
-        clearInterval(poll);
+        clearInterval(pollInterval);
         isPlaying = false;
         nowPlaying = null;
         io.emit('queueUpdate', { queue, nowPlaying });
@@ -223,6 +226,7 @@ async function playNextSong() {
 // Manual skip
 app.post('/play', async (req, res) => {
   try {
+    if (pollInterval) clearInterval(pollInterval); // stop old poll
     await playNextSong();
     res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
