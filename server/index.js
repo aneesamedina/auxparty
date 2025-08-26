@@ -201,6 +201,7 @@ async function playNextSong() {
         const currentTrackId = player.item.id;
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
+        const isPlayingNow = player.is_playing;
 
         // Detect track change (e.g. user skips manually or autoplay triggers)
         if (lastTrackId && currentTrackId !== lastTrackId) {
@@ -218,7 +219,18 @@ async function playNextSong() {
           return;
         }
 
-        // Optional: Log manual seek
+        // Detect manual seek forward near end OR paused near end
+        if (
+          (progress > lastProgress && progress >= duration - 5000) ||
+          (!isPlayingNow && progress >= duration - 5000)
+        ) {
+          console.log(`[End Detection] User seeked near end or paused near end`);
+          clearInterval(poll);
+          playNextSong();
+          return;
+        }
+
+        // Optional: Log manual seek backward
         if (progress < lastProgress) {
           console.log(`[Seek Detected] Progress jumped back (user seek?)`);
         }
