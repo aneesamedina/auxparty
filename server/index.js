@@ -220,7 +220,7 @@ async function playNextSong() {
   }
 }
 
-// Manual skip
+// Manual skip (your original way)
 app.post('/play', async (req, res) => {
   try {
     await playNextSong();
@@ -228,6 +228,33 @@ app.post('/play', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to play next song' });
+  }
+});
+
+// 🔹 New minimal endpoint for Spotify's native "next"
+app.post('/next', async (req, res) => {
+  try {
+    await spotifyFetch('https://api.spotify.com/v1/me/player/next', { method: 'POST' });
+
+    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+    if (player && player.item) {
+      nowPlaying = {
+        trackName: player.item.name,
+        song: player.item.uri,
+        artists: player.item.artists.map(a => a.name),
+        addedBy: "Spotify Next",
+        album: {
+          name: player.item.album.name,
+          images: player.item.album.images
+        }
+      };
+      io.emit('queueUpdate', { queue, nowPlaying });
+    }
+
+    res.json({ message: 'Skipped to next track on Spotify', nowPlaying });
+  } catch (err) {
+    console.error('Failed to skip track:', err);
+    res.status(500).json({ error: 'Failed to skip track' });
   }
 });
 
@@ -254,7 +281,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-
 async function fetchAutoplaySong() {
   try {
     const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
@@ -278,7 +304,6 @@ async function fetchAutoplaySong() {
     return null;
   }
 }
-
 
 const http = require('http');
 const { Server } = require('socket.io');
