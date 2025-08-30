@@ -174,9 +174,6 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // Track the current song URI
-  const currentTrackId = next.song;
-
   // 3️⃣ Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
@@ -185,11 +182,11 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // 4️⃣ Poll Spotify to detect song end safely
+    // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-
+        console.log(player);
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
@@ -198,21 +195,14 @@ async function playNextSong() {
           return;
         }
 
-        // Stop polling if the user changed the track manually
-        if (player.item.uri !== currentTrackId) {
-          clearInterval(poll);
-          return;
-        }
-
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        // Only skip when the track truly finishes
-        if (progress >= duration - 1000) {
+        if (!player.is_playing || progress >= duration - 1000) {
           clearInterval(poll);
+          // Automatically play next track
           playNextSong();
         }
-
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
@@ -230,39 +220,10 @@ async function playNextSong() {
   }
 }
 
-//Spotify manual skip helper
-async function syncNowPlaying() {
-  try {
-    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-    if (!player || !player.item) {
-      nowPlaying = null;
-      isPlaying = false;
-      io.emit('queueUpdate', { queue, nowPlaying });
-      return;
-    }
-
-    nowPlaying = {
-      trackName: player.item.name,
-      song: player.item.uri,
-      artists: player.item.artists.map(a => a.name),
-      addedBy: 'Spotify App', // placeholder if user manually skipped
-      album: {
-        name: player.item.album.name,
-        images: player.item.album.images
-      }
-    };
-    isPlaying = player.is_playing;
-    io.emit('queueUpdate', { queue, nowPlaying });
-  } catch (err) {
-    console.error('Failed to sync nowPlaying:', err);
-  }
-}
-
 // Manual skip
 app.post('/play', async (req, res) => {
   try {
     await playNextSong();
-    await syncNowPlaying(); // <-- minimal addition here
     res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
     console.error(err);
