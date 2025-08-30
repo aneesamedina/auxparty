@@ -28,6 +28,9 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
+// 🔒 skip lock to prevent double-play
+let skipLock = false;
+
 // Spotify Auth
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
@@ -146,9 +149,14 @@ app.post('/queue', async (req, res) => {
 });
 
 // Play next song
-async function playNextSong() {
+async function playNextSong(manual = false) {
+  if (skipLock) return;
+  skipLock = true;
+  setTimeout(() => skipLock = false, 1000);
+
   let next;
 
+  // Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -161,6 +169,7 @@ async function playNextSong() {
     }
   }
 
+  // Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -171,6 +180,7 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
+  // Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -178,6 +188,7 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
+    // Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -189,32 +200,13 @@ async function playNextSong() {
           return;
         }
 
-        const spotifyUri = player.item.uri;
-
-        // ✅ Sync nowPlaying with Spotify to prevent multiple skips
-        if (!nowPlaying || nowPlaying.song !== spotifyUri) {
-          nowPlaying = {
-            trackName: player.item.name,
-            song: spotifyUri,
-            artists: player.item.artists.map(a => a.name),
-            addedBy: 'Spotify',
-            album: {
-              name: player.item.album.name,
-              images: player.item.album.images
-            }
-          };
-          io.emit('queueUpdate', { queue, nowPlaying });
-          return; // skip queue.shift(), Spotify already advanced
-        }
-
-        // Normal end-of-song detection
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
+
         if (!player.is_playing || progress >= duration - 1000) {
           clearInterval(poll);
           playNextSong();
         }
-
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
@@ -235,7 +227,7 @@ async function playNextSong() {
 // Manual skip
 app.post('/play', async (req, res) => {
   try {
-    await playNextSong();
+    await playNextSong(true);
     res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
     console.error(err);
@@ -266,7 +258,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-
 async function fetchAutoplaySong() {
   try {
     const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
@@ -290,7 +281,6 @@ async function fetchAutoplaySong() {
     return null;
   }
 }
-
 
 const http = require('http');
 const { Server } = require('socket.io');
