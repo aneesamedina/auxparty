@@ -230,10 +230,39 @@ async function playNextSong() {
   }
 }
 
+//Spotify manual skip helper
+async function syncNowPlaying() {
+  try {
+    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+    if (!player || !player.item) {
+      nowPlaying = null;
+      isPlaying = false;
+      io.emit('queueUpdate', { queue, nowPlaying });
+      return;
+    }
+
+    nowPlaying = {
+      trackName: player.item.name,
+      song: player.item.uri,
+      artists: player.item.artists.map(a => a.name),
+      addedBy: 'Spotify App', // placeholder if user manually skipped
+      album: {
+        name: player.item.album.name,
+        images: player.item.album.images
+      }
+    };
+    isPlaying = player.is_playing;
+    io.emit('queueUpdate', { queue, nowPlaying });
+  } catch (err) {
+    console.error('Failed to sync nowPlaying:', err);
+  }
+}
+
 // Manual skip
 app.post('/play', async (req, res) => {
   try {
     await playNextSong();
+    await syncNowPlaying(); // <-- minimal addition here
     res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
     console.error(err);
