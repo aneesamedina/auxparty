@@ -174,6 +174,9 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
+  // Track the current song URI
+  const currentTrackId = next.song;
+
   // 3️⃣ Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
@@ -182,11 +185,11 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // 4️⃣ Poll Spotify to detect song end
+    // 4️⃣ Poll Spotify to detect song end safely
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        console.log(player);
+
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
@@ -195,14 +198,21 @@ async function playNextSong() {
           return;
         }
 
+        // Stop polling if the user changed the track manually
+        if (player.item.uri !== currentTrackId) {
+          clearInterval(poll);
+          return;
+        }
+
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        // Only skip when the track truly finishes
+        if (progress >= duration - 1000) {
           clearInterval(poll);
-          // Automatically play next track
           playNextSong();
         }
+
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
