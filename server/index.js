@@ -150,9 +150,12 @@ app.post('/queue', async (req, res) => {
 
 // Play next song
 async function playNextSong(manual = false) {
-  if (skipLock) return;
-  skipLock = true;
-  setTimeout(() => skipLock = false, 1000);
+  // Only lock for autoplay; manual skips bypass lock
+  if (!manual && skipLock) return;
+  if (!manual) {
+    skipLock = true;
+    setTimeout(() => skipLock = false, 1000);
+  }
 
   let next;
 
@@ -203,7 +206,7 @@ async function playNextSong(manual = false) {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        // Only go to next song if it’s playing AND nearly finished
+        // Only advance if song finished naturally
         if (player.is_playing && progress >= duration - 1000) {
           clearInterval(poll);
           playNextSong();
