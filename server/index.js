@@ -27,6 +27,7 @@ let refreshToken = null;
 let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
+let skipCooldown = false; // 🔹 new flag
 
 // Spotify Auth
 app.get('/login', (req, res) => {
@@ -198,9 +199,9 @@ async function playNextSong() {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        // 🔹 prevent double skip if we're in manual skip cooldown
+        if (!skipCooldown && (!player.is_playing || progress >= duration - 1000)) {
           clearInterval(poll);
-          // Automatically play next track
           playNextSong();
         }
       } catch (err) {
@@ -234,6 +235,9 @@ app.post('/play', async (req, res) => {
 // 🔹 New minimal endpoint for Spotify's native "next"
 app.post('/next', async (req, res) => {
   try {
+    skipCooldown = true; // 🛑 prevent poll-triggered skip
+    setTimeout(() => { skipCooldown = false; }, 3000); // reset after 3s
+
     await spotifyFetch('https://api.spotify.com/v1/me/player/next', { method: 'POST' });
 
     const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
