@@ -203,7 +203,8 @@ async function playNextSong(manual = false) {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        // Only go to next song if it’s playing AND nearly finished
+        if (player.is_playing && progress >= duration - 1000) {
           clearInterval(poll);
           playNextSong();
         }
