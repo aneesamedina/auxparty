@@ -13,8 +13,8 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
-const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
-let autoplayIndex = 0; // keeps track of which song to play next in autoplay
+const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA';
+let autoplayIndex = 0;
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -133,12 +133,10 @@ app.post('/queue', async (req, res) => {
     };
     queue.push(newItem);
 
-    // Only auto-play if nothing is playing
     if (!nowPlaying) {
       playNextSong();
     }
 
-    // Respond with actual current state
     res.json({ queue, nowPlaying });
   } catch (err) {
     console.error('Failed to add song:', err);
@@ -150,7 +148,6 @@ app.post('/queue', async (req, res) => {
 async function playNextSong() {
   let next;
 
-  // 1️⃣ Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -163,7 +160,6 @@ async function playNextSong() {
     }
   }
 
-  // 2️⃣ Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -174,7 +170,8 @@ async function playNextSong() {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // 3️⃣ Play song on Spotify
+  let currentTrackId = next.song;
+
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -182,11 +179,10 @@ async function playNextSong() {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // 4️⃣ Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        console.log(player);
+
         if (!player || !player.item) {
           clearInterval(poll);
           isPlaying = false;
@@ -195,14 +191,31 @@ async function playNextSong() {
           return;
         }
 
+        // If track changed manually, update nowPlaying and keep polling
+        if (player.item.uri !== currentTrackId) {
+          currentTrackId = player.item.uri;
+          nowPlaying = {
+            trackName: player.item.name,
+            song: player.item.uri,
+            artists: player.item.artists.map(a => a.name),
+            addedBy: 'Spotify App',
+            album: {
+              name: player.item.album.name,
+              images: player.item.album.images
+            }
+          };
+          isPlaying = player.is_playing;
+          io.emit('queueUpdate', { queue, nowPlaying });
+        }
+
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        if (progress >= duration - 1000) {
           clearInterval(poll);
-          // Automatically play next track
           playNextSong();
         }
+
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
@@ -254,7 +267,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-
 async function fetchAutoplaySong() {
   try {
     const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
@@ -279,14 +291,11 @@ async function fetchAutoplaySong() {
   }
 }
 
-
 const http = require('http');
 const { Server } = require('socket.io');
 
-// Wrap Express app
 const server = http.createServer(app);
 
-// Create Socket.IO instance
 const io = new Server(server, {
   cors: {
     origin: 'https://auxparty-pied.vercel.app',
@@ -295,15 +304,12 @@ const io = new Server(server, {
   }
 });
 
-// Listen for connections
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
 
-  // Send a test message immediately
   socket.emit('testMessage', { msg: 'Hello from server!' });
   socket.emit('queueUpdate', { queue, nowPlaying });
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
-// Replace app.listen with server.listen
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
