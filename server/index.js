@@ -181,7 +181,7 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // Poll to check song end, ignore pause
+    // Poll to check song end, only advance when song finishes and isPlaying
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -196,8 +196,7 @@ async function playNextSong(manual = false) {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        // Only advance when song finishes
-        if (progress >= duration - 1000) {
+        if (progress >= duration - 1000 && isPlaying) {
           clearInterval(poll);
           playNextSong();
         }
@@ -218,6 +217,7 @@ async function playNextSong(manual = false) {
   }
 }
 
+// Skip/Next
 app.post('/play', async (req, res) => {
   try {
     await playNextSong(true);
@@ -225,6 +225,30 @@ app.post('/play', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to play next song' });
+  }
+});
+
+// Pause Spotify
+app.post('/pause', async (req, res) => {
+  try {
+    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
+    isPlaying = false;
+    res.json({ message: 'Playback paused', nowPlaying });
+  } catch (err) {
+    console.error('Pause failed:', err);
+    res.status(500).json({ error: 'Failed to pause' });
+  }
+});
+
+// Resume Spotify
+app.post('/resume', async (req, res) => {
+  try {
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+    isPlaying = true;
+    res.json({ message: 'Playback resumed', nowPlaying });
+  } catch (err) {
+    console.error('Resume failed:', err);
+    res.status(500).json({ error: 'Failed to resume' });
   }
 });
 
