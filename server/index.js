@@ -27,9 +27,6 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
-// 🔒 skip lock to prevent double-play
-let skipLock = false;
-
 // Spotify Auth
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
@@ -149,12 +146,6 @@ app.post('/queue', async (req, res) => {
 
 // Play next song
 async function playNextSong(manual = false) {
-  if (!manual && skipLock) return;
-  if (!manual) {
-    skipLock = true;
-    setTimeout(() => skipLock = false, 1000);
-  }
-
   let next;
 
   if (queue.length > 0) {
@@ -186,7 +177,6 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // Poll Spotify
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -200,7 +190,7 @@ async function playNextSong(manual = false) {
 
         const currentTrackId = player.item.uri;
 
-        // Manual skip detection: only update nowPlaying if the track changed externally
+        // Detect manual skip
         if (nowPlaying && currentTrackId !== nowPlaying.song) {
           nowPlaying = {
             trackName: player.item.name,
@@ -214,10 +204,10 @@ async function playNextSong(manual = false) {
           };
           isPlaying = player.is_playing;
           io.emit('queueUpdate', { queue, nowPlaying });
-          return; // skip auto-next so it doesn't pause immediately
+          return;
         }
 
-        // True pause detection
+        // Detect pause
         if (!player.is_playing) {
           isPlaying = false;
           io.emit('queueUpdate', { queue, nowPlaying });
@@ -238,7 +228,7 @@ async function playNextSong(manual = false) {
         nowPlaying = null;
         io.emit('queueUpdate', { queue, nowPlaying });
       }
-    }, 2000);
+    }, 1500); // Poll every 1.5s
 
   } catch (err) {
     console.error('Failed to play song:', err);
