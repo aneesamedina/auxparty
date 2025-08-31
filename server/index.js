@@ -13,8 +13,8 @@ const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
 const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
-const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
-let autoplayIndex = 0; // keeps track of which song to play next in autoplay
+const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA';
+let autoplayIndex = 0;
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -28,7 +28,7 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
-// 🔒 skip lock to prevent double-play
+// skip lock
 let skipLock = false;
 
 // Spotify Auth
@@ -68,7 +68,6 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// Helpers
 async function refreshAccessToken() {
   if (!refreshToken) throw new Error('No refresh token available');
   const res = await fetch('https://accounts.spotify.com/api/token', {
@@ -112,7 +111,6 @@ app.post('/login', (req, res) => {
   res.json({ sessionId, name, role });
 });
 
-// Queue endpoints
 app.get('/queue', (req, res) => {
   res.json({ queue, nowPlaying });
 });
@@ -136,7 +134,6 @@ app.post('/queue', async (req, res) => {
     };
     queue.push(newItem);
 
-    // Only auto-play if nothing is playing
     if (!nowPlaying) {
       playNextSong();
     }
@@ -148,7 +145,6 @@ app.post('/queue', async (req, res) => {
   }
 });
 
-// Play next song
 async function playNextSong(manual = false) {
   if (skipLock) return;
   skipLock = true;
@@ -156,7 +152,6 @@ async function playNextSong(manual = false) {
 
   let next;
 
-  // Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -169,7 +164,6 @@ async function playNextSong(manual = false) {
     }
   }
 
-  // Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -180,7 +174,6 @@ async function playNextSong(manual = false) {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-  // Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -188,7 +181,7 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // Poll Spotify to detect song end
+    // Poll to check song end, ignore pause
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -203,7 +196,8 @@ async function playNextSong(manual = false) {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        if (!player.is_playing || progress >= duration - 1000) {
+        // Only advance when song finishes
+        if (progress >= duration - 1000) {
           clearInterval(poll);
           playNextSong();
         }
@@ -224,7 +218,6 @@ async function playNextSong(manual = false) {
   }
 }
 
-// Manual skip
 app.post('/play', async (req, res) => {
   try {
     await playNextSong(true);
@@ -235,20 +228,6 @@ app.post('/play', async (req, res) => {
   }
 });
 
-// NEW: Pause endpoint
-app.post('/pause', async (req, res) => {
-  try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-    isPlaying = false;
-    io.emit('queueUpdate', { queue, nowPlaying });
-    res.json({ message: 'Playback paused', queue, nowPlaying });
-  } catch (err) {
-    console.error('Failed to pause:', err);
-    res.status(500).json({ error: 'Failed to pause playback' });
-  }
-});
-
-// Search
 app.get('/search', async (req, res) => {
   const q = req.query.q;
   if (!q) return res.status(400).json({ error: 'Query required' });
