@@ -217,8 +217,8 @@ async function playNextSong(manual = false) {
           return;
         }
 
-        // True pause detected only if track didn't change
-        if (nowPlaying && !player.is_playing && currentTrackId === nowPlaying.song) {
+        // True pause detection
+        if (!player.is_playing && currentTrackId === nowPlaying.song) {
           isPlaying = false;
           io.emit('queueUpdate', { queue, nowPlaying });
           return;
