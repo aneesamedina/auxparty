@@ -235,18 +235,16 @@ app.post('/play', async (req, res) => {
   }
 });
 
-// --- NEW: Pause endpoint ---
+// NEW: Pause endpoint
 app.post('/pause', async (req, res) => {
   try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', {
-      method: 'PUT'
-    });
+    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
     isPlaying = false;
     io.emit('queueUpdate', { queue, nowPlaying });
-    res.json({ message: 'Playback paused' });
+    res.json({ message: 'Playback paused', queue, nowPlaying });
   } catch (err) {
     console.error('Failed to pause:', err);
-    res.status(500).json({ error: 'Failed to pause' });
+    res.status(500).json({ error: 'Failed to pause playback' });
   }
 });
 
