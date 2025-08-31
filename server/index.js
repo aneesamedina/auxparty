@@ -186,7 +186,7 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // ✅ Poll Spotify
+    // Poll Spotify
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -200,7 +200,7 @@ async function playNextSong(manual = false) {
 
         const currentTrackId = player.item.uri;
 
-        // Manual skip detected (track changed)
+        // Manual skip detection: only update nowPlaying if the track changed externally
         if (nowPlaying && currentTrackId !== nowPlaying.song) {
           nowPlaying = {
             trackName: player.item.name,
@@ -214,11 +214,11 @@ async function playNextSong(manual = false) {
           };
           isPlaying = player.is_playing;
           io.emit('queueUpdate', { queue, nowPlaying });
-          return; // continue polling
+          return; // skip auto-next so it doesn't pause immediately
         }
 
-        // True pause
-        if (!player.is_playing && nowPlaying && currentTrackId === nowPlaying.song) {
+        // True pause detection
+        if (!player.is_playing) {
           isPlaying = false;
           io.emit('queueUpdate', { queue, nowPlaying });
           return;
