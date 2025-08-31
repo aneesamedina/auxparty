@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+
 const querystring = require('querystring');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
@@ -13,7 +14,7 @@ const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
 const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
-let autoplayIndex = 0;
+let autoplayIndex = 0; // keeps track of which song to play next in autoplay
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -26,6 +27,9 @@ let refreshToken = null;
 let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
+
+// 🔒 skip lock to prevent double-play
+let skipLock = false;
 
 // Spotify Auth
 app.get('/login', (req, res) => {
@@ -97,7 +101,6 @@ async function spotifyFetch(url, options = {}, retry = true) {
   return text ? JSON.parse(text) : null;
 }
 
-// Session login
 app.post('/login', (req, res) => {
   const { name, role } = req.body;
   if (!name || !role || !['host','guest'].includes(role)) {
@@ -133,6 +136,7 @@ app.post('/queue', async (req, res) => {
     };
     queue.push(newItem);
 
+    // Only auto-play if nothing is playing
     if (!nowPlaying) {
       playNextSong();
     }
@@ -146,8 +150,13 @@ app.post('/queue', async (req, res) => {
 
 // Play next song
 async function playNextSong(manual = false) {
+  if (skipLock) return;
+  skipLock = true;
+  setTimeout(() => skipLock = false, 1000);
+
   let next;
 
+  // Determine next track
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -160,6 +169,7 @@ async function playNextSong(manual = false) {
     }
   }
 
+  // Update state
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -170,6 +180,7 @@ async function playNextSong(manual = false) {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
+  // Play song on Spotify
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -177,6 +188,7 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
+    // Poll Spotify to detect song end
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -188,36 +200,10 @@ async function playNextSong(manual = false) {
           return;
         }
 
-        const currentTrackId = player.item.uri;
-
-        // Detect manual skip
-        if (nowPlaying && currentTrackId !== nowPlaying.song) {
-          nowPlaying = {
-            trackName: player.item.name,
-            song: currentTrackId,
-            artists: player.item.artists.map(a => a.name),
-            addedBy: 'Spotify',
-            album: {
-              name: player.item.album.name,
-              images: player.item.album.images
-            }
-          };
-          isPlaying = player.is_playing;
-          io.emit('queueUpdate', { queue, nowPlaying });
-          return;
-        }
-
-        // Detect pause
-        if (!player.is_playing) {
-          isPlaying = false;
-          io.emit('queueUpdate', { queue, nowPlaying });
-          return;
-        }
-
-        // Advance if song finished naturally
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
-        if (progress >= duration - 1000) {
+
+        if (!player.is_playing || progress >= duration - 1000) {
           clearInterval(poll);
           playNextSong();
         }
@@ -228,7 +214,7 @@ async function playNextSong(manual = false) {
         nowPlaying = null;
         io.emit('queueUpdate', { queue, nowPlaying });
       }
-    }, 1500); // Poll every 1.5s
+    }, 2000);
 
   } catch (err) {
     console.error('Failed to play song:', err);
@@ -238,7 +224,7 @@ async function playNextSong(manual = false) {
   }
 }
 
-// Manual skip endpoint
+// Manual skip
 app.post('/play', async (req, res) => {
   try {
     await playNextSong(true);
@@ -296,7 +282,6 @@ async function fetchAutoplaySong() {
   }
 }
 
-// Socket.io
 const http = require('http');
 const { Server } = require('socket.io');
 
