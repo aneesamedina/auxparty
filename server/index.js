@@ -13,7 +13,7 @@ const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
 const playlist_id = '6y9w7QNN7CqmPF6MxE4VGA'; // replace with your playlist ID
-let autoplayIndex = 0; // keeps track of which song to play next in autoplay
+let autoplayIndex = 0;
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -26,8 +26,8 @@ let refreshToken = null;
 let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
-let currentTrackId = null; // NEW: track ID of nowPlaying
 
+// 🔒 skip lock to prevent double-play
 let skipLock = false;
 
 // Spotify Auth
@@ -100,6 +100,7 @@ async function spotifyFetch(url, options = {}, retry = true) {
   return text ? JSON.parse(text) : null;
 }
 
+// Session login
 app.post('/login', (req, res) => {
   const { name, role } = req.body;
   if (!name || !role || !['host','guest'].includes(role)) {
@@ -135,7 +136,6 @@ app.post('/queue', async (req, res) => {
     };
     queue.push(newItem);
 
-    // Only auto-play if nothing is playing
     if (!nowPlaying) {
       playNextSong();
     }
@@ -156,6 +156,7 @@ async function playNextSong(manual = false) {
   }
 
   let next;
+
   if (queue.length > 0) {
     next = queue.shift();
   } else {
@@ -163,7 +164,6 @@ async function playNextSong(manual = false) {
     if (!next) {
       isPlaying = false;
       nowPlaying = null;
-      currentTrackId = null;
       io.emit('queueUpdate', { queue, nowPlaying });
       return;
     }
@@ -177,7 +177,6 @@ async function playNextSong(manual = false) {
     album: next.album
   };
   isPlaying = true;
-  currentTrackId = next.song; // NEW
   io.emit('queueUpdate', { queue, nowPlaying });
 
   try {
@@ -187,7 +186,7 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // POLL Spotify to handle manual skips & song end
+    // Poll Spotify
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -195,21 +194,17 @@ async function playNextSong(manual = false) {
           clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
-          currentTrackId = null;
           io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
 
-        const progress = player.progress_ms;
-        const duration = player.item.duration_ms;
-        const spotifyTrackId = player.item.uri;
+        const currentTrackId = player.item.uri;
 
         // Manual skip detected
-        if (spotifyTrackId !== currentTrackId) {
-          currentTrackId = spotifyTrackId;
+        if (nowPlaying && currentTrackId !== nowPlaying.song) {
           nowPlaying = {
             trackName: player.item.name,
-            song: player.item.uri,
+            song: currentTrackId,
             artists: player.item.artists.map(a => a.name),
             addedBy: 'Spotify',
             album: {
@@ -217,29 +212,30 @@ async function playNextSong(manual = false) {
               images: player.item.album.images
             }
           };
-          isPlaying = true;
+          isPlaying = player.is_playing;
+          io.emit('queueUpdate', { queue, nowPlaying });
+          return;
+        }
+
+        // True pause
+        if (!player.is_playing) {
+          isPlaying = false;
           io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
 
         // Advance if song finished naturally
-        if (player.is_playing && progress >= duration - 1000) {
+        const progress = player.progress_ms;
+        const duration = player.item.duration_ms;
+        if (progress >= duration - 1000) {
           clearInterval(poll);
           playNextSong();
         }
-
-        // Pause handling only if track hasn’t changed
-        if (!player.is_playing && spotifyTrackId === currentTrackId) {
-          isPlaying = false;
-          io.emit('queueUpdate', { queue, nowPlaying });
-        }
-
       } catch (err) {
         console.error('Polling error:', err);
         clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
-        currentTrackId = null;
         io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
@@ -248,12 +244,11 @@ async function playNextSong(manual = false) {
     console.error('Failed to play song:', err);
     isPlaying = false;
     nowPlaying = null;
-    currentTrackId = null;
     io.emit('queueUpdate', { queue, nowPlaying });
   }
 }
 
-// Manual skip
+// Manual skip endpoint
 app.post('/play', async (req, res) => {
   try {
     await playNextSong(true);
@@ -311,6 +306,7 @@ async function fetchAutoplaySong() {
   }
 }
 
+// Socket.io
 const http = require('http');
 const { Server } = require('socket.io');
 
