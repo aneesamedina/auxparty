@@ -21,7 +21,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-//
 let history = []; // store songs that have already played
 let accessToken = null;
 let refreshToken = null;
@@ -292,16 +291,8 @@ app.post('/pause', async (req, res) => {
 // Resume Spotify (generic)
 app.post('/resume', async (req, res) => {
   try {
-    if (!nowPlaying) return res.status(400).json({ error: 'No song to resume' });
-
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [nowPlaying.song] }),
-    });
-
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
     isPlaying = true;
-    io.emit('queueUpdate', { queue, nowPlaying });
     res.json({ message: 'Playback resumed', nowPlaying });
   } catch (err) {
     console.error('Resume failed:', err);

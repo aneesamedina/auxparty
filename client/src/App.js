@@ -69,8 +69,9 @@ function LoginPage({ onSelectRole }) {
 // -------------------
 function MainQueueApp({ role }) {
   const [queue, setQueue] = useState([]);
-  const [name, setName] = useState(() => localStorage.getItem("guestName") || "");
-  const [draftName, setDraftName] = useState("");
+  const [name, setName] = useState(() => localStorage.getItem('guestName') || '');
+  const [draftName, setDraftName] = useState('');
+  const [song, setSong] = useState('');
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
@@ -86,41 +87,89 @@ function MainQueueApp({ role }) {
     };
   };
 
-  // --------------------------
-  // Socket.IO
-  const [socket, setSocket] = useState(null);
+  // -------------------
+  // Playback Controls
+  // -------------------
+  const playPrevious = async () => {
+    try {
+      const res = await fetch(`${API_URL}/host/previous`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      setNowPlaying(normalizeNowPlaying(data.nowPlaying));
+      if (data.queue) setQueue(data.queue);
+    } catch (err) {
+      console.error('Error playing previous:', err);
+      alert('No previous track available or failed to skip.');
+    }
+  };
 
+  const togglePause = async () => {
+    try {
+      const endpoint = isPaused ? 'play' : 'pause';
+      const res = await fetch(`${API_URL}/${endpoint}`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      setIsPaused(!isPaused);
+    } catch (err) {
+      console.error('Error toggling pause:', err);
+    }
+  };
+
+  const playNext = async () => {
+    try {
+      const res = await fetch(`${API_URL}/play`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      setNowPlaying(normalizeNowPlaying(data.nowPlaying));
+      setQueue(data.queue);
+      setIsPaused(false);
+    } catch (err) {
+      console.error('Error playing next:', err);
+    }
+  };
+
+  // -------------------
+  // Socket.IO for real-time updates
+  // -------------------
   useEffect(() => {
-    const s = io(API_URL, { withCredentials: true });
-    setSocket(s);
-
-    // Listen for real-time updates
-    s.on('queueUpdate', ({ queue, nowPlaying }) => {
+    const socket = io(API_URL, { withCredentials: true });
+    socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
-
-    s.on('pauseUpdate', (paused) => {
-      setIsPaused(paused);
-    });
-
-    return () => s.disconnect();
+    return () => socket.disconnect();
   }, []);
 
-  // --------------------------
-  // Host Controls via Socket
-  const playNext = () => socket.emit('playNext');
-  const playPrevious = () => socket.emit('playPrevious');
-  const togglePause = () => socket.emit('togglePause');
+  // -------------------
+  // Polling fallback
+  // -------------------
+  useEffect(() => {
+    const fetchQueue = async () => {
+      try {
+        const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const data = await res.json();
+        setQueue(JSON.stringify(queue) !== JSON.stringify(data.queue) ? data.queue : queue);
+        setNowPlaying(
+          JSON.stringify(nowPlaying) !== JSON.stringify(data.nowPlaying)
+            ? normalizeNowPlaying(data.nowPlaying)
+            : nowPlaying
+        );
+      } catch (err) {
+        console.error('Error fetching queue:', err);
+      }
+    };
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 3000);
+    return () => clearInterval(interval);
+  }, [queue, nowPlaying]);
 
-  // --------------------------
-  // Guest/Host song interactions
+  // -------------------
+  // Search & Add Songs
+  // -------------------
   const searchSong = async () => {
     if (!search) return;
     try {
-      const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(search)}`, {
-        credentials: 'include',
-      });
+      const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(search)}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setResults(Array.isArray(data.tracks) ? data.tracks : []);
@@ -131,32 +180,32 @@ function MainQueueApp({ role }) {
 
   const addSong = async (track) => {
     const guestName = name || draftName.trim();
-    if (!guestName || !track) return alert("Enter your name first");
-
+    if (!guestName || !track) return alert('Enter your name first');
     try {
       const res = await fetch(`${API_URL}/queue`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: guestName, song: track.uri }),
-        credentials: "include",
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setQueue(data.queue);
-      setNowPlaying((prev) => prev || normalizeNowPlaying(data.nowPlaying));
-
+      setNowPlaying((prev) => prev || data.nowPlaying);
       setResults([]);
       setSearch('');
-
       if (!name) {
         setName(guestName);
-        localStorage.setItem("guestName", guestName);
+        localStorage.setItem('guestName', guestName);
       }
     } catch (err) {
-      console.error("Error adding song:", err);
+      console.error('Error adding song:', err);
     }
   };
 
+  // -------------------
+  // Render
+  // -------------------
   return (
     <div
       style={{
@@ -168,52 +217,88 @@ function MainQueueApp({ role }) {
         color: '#fff',
       }}
     >
+      <style>{`
+        @keyframes gradientAnimation {
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
+        }
+        .queue-button, .role-button {
+          padding: 8px 20px;
+          font-size: 16px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          color: #fff;
+          transition: all 0.2s ease;
+        }
+        .queue-button:hover, .role-button:hover {
+          transform: scale(1.05);
+          box-shadow: 0 0 15px rgba(255,255,255,0.6);
+          filter: brightness(1.1);
+        }
+        .host-button { background-color: #aaaaaaff; }
+        .guest-button { background-color: #303030ff; }
+        .song-input {
+          padding: 8px 12px;
+          font-size: 16px;
+          border-radius: 8px;
+          border: none;
+          margin-right: 8px;
+        }
+        .song-item {
+          display: flex;
+          align-items: center;
+          margin-bottom: 10px;
+          gap: 10px;
+        }
+        .song-item img {
+          width: 64px;
+          height: 64px;
+          border-radius: 8px;
+        }
+        .song-info {
+          display: flex;
+          flex-direction: column;
+        }
+        .song-info .title { font-weight: bold; font-size: 16px; }
+        .song-info .artists, .song-info .added-by { font-size: 12px; color: #eee; }
+      `}</style>
+
       <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
       {role === 'host' && (
         <div style={{ marginBottom: 20, display: 'flex', gap: 10 }}>
           <button className="queue-button host-button" onClick={playPrevious}>Previous</button>
           <button className="queue-button host-button" onClick={togglePause}>
-            {isPaused ? '▶️ Resume' : '⏸ Pause'}
+            {isPaused ? '▶ Resume' : '⏸ Pause'}
           </button>
           <button className="queue-button host-button" onClick={playNext}>Next</button>
         </div>
       )}
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {!name && <input
-          className="song-input"
-          placeholder="Your Name"
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-        />}
-        {name && <div>👋 Welcome, {name}</div>}
+        {!name && <input className="song-input" placeholder="Your Name" value={draftName} onChange={(e) => setDraftName(e.target.value)} />}
+        {name && <span>👋 Welcome, {name}</span>}
       </div>
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          className="song-input"
-          placeholder="Search Spotify"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <input className="song-input" placeholder="Search Spotify" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
 
-      <div>
-        <ul>
-          {results.map((track, idx) => (
-            <li key={idx} className="song-item">
-              <img src={track.album?.images[0]?.url} alt={track.name} />
-              <div className="song-info">
-                <div className="title">{track.name}</div>
-                <div className="artists">{track.artists.join(', ')}</div>
-              </div>
-              <button className="queue-button host-button" onClick={() => addSong(track)}>➕ Add</button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <ul>
+        {results.map((track, idx) => (
+          <li key={idx} className="song-item">
+            <img src={track.album?.images[0]?.url} alt={track.name} />
+            <div className="song-info">
+              <div className="title">{track.name}</div>
+              <div className="artists">{track.artists.join(', ')}</div>
+            </div>
+            <button className="queue-button host-button" onClick={() => addSong(track)}>➕ Add to Queue</button>
+          </li>
+        ))}
+      </ul>
 
       <h2>Now Playing</h2>
       {nowPlaying && (
@@ -245,7 +330,6 @@ function MainQueueApp({ role }) {
   );
 }
 
-//
 // -------------------
 // Main App Component
 // -------------------
