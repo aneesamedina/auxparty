@@ -88,16 +88,14 @@ function MainQueueApp({ role }) {
 
   const playPrevious = async () => {
   try {
-    const res = await fetch(`${API_URL}/previous`, { // make sure your backend has this endpoint
-      method: 'POST',
-      credentials: 'include',
-    });
+    const res = await fetch(`${API_URL}/host/previous`, { method: 'POST', credentials: 'include' });
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const data = await res.json();
     setNowPlaying(normalizeNowPlaying(data.nowPlaying));
-    setQueue(data.queue);
+    if (data.queue) setQueue(data.queue);
   } catch (err) {
     console.error('Error playing previous:', err);
+    alert('No previous track available or failed to skip.');
   }
 };
 
