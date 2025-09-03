@@ -69,14 +69,13 @@ function LoginPage({ onSelectRole }) {
 // -------------------
 function MainQueueApp({ role }) {
   const [queue, setQueue] = useState([]);
-  const [name, setName] = useState(() => localStorage.getItem('guestName') || '');
-  const [draftName, setDraftName] = useState('');
+  const [name, setName] = useState(() => localStorage.getItem("guestName") || "");
+  const [draftName, setDraftName] = useState("");
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  // Normalize the nowPlaying object
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
     return {
@@ -95,18 +94,21 @@ function MainQueueApp({ role }) {
     const s = io(API_URL, { withCredentials: true });
     setSocket(s);
 
-    // Listen for queue updates
-    s.on('queueUpdate', ({ queue, nowPlaying, isPlaying }) => {
+    // Listen for real-time updates
+    s.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
-      setIsPaused(!isPlaying); // if !isPlaying => paused
+    });
+
+    s.on('pauseUpdate', (paused) => {
+      setIsPaused(paused);
     });
 
     return () => s.disconnect();
   }, []);
 
   // --------------------------
-  // Host Controls
+  // Host Controls via Socket
   const playNext = () => socket.emit('playNext');
   const playPrevious = () => socket.emit('playPrevious');
   const togglePause = () => socket.emit('togglePause');
@@ -129,28 +131,29 @@ function MainQueueApp({ role }) {
 
   const addSong = async (track) => {
     const guestName = name || draftName.trim();
-    if (!guestName || !track) return alert('Enter your name first');
+    if (!guestName || !track) return alert("Enter your name first");
 
     try {
       const res = await fetch(`${API_URL}/queue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: guestName, song: track.uri }),
-        credentials: 'include',
+        credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setQueue(data.queue);
       setNowPlaying((prev) => prev || normalizeNowPlaying(data.nowPlaying));
+
       setResults([]);
       setSearch('');
 
       if (!name) {
         setName(guestName);
-        localStorage.setItem('guestName', guestName);
+        localStorage.setItem("guestName", guestName);
       }
     } catch (err) {
-      console.error('Error adding song:', err);
+      console.error("Error adding song:", err);
     }
   };
 
@@ -169,27 +172,21 @@ function MainQueueApp({ role }) {
 
       {role === 'host' && (
         <div style={{ marginBottom: 20, display: 'flex', gap: 10 }}>
-          <button className="queue-button host-button" onClick={playPrevious}>
-            Previous
-          </button>
+          <button className="queue-button host-button" onClick={playPrevious}>Previous</button>
           <button className="queue-button host-button" onClick={togglePause}>
             {isPaused ? '▶️ Resume' : '⏸ Pause'}
           </button>
-          <button className="queue-button host-button" onClick={playNext}>
-            Next
-          </button>
+          <button className="queue-button host-button" onClick={playNext}>Next</button>
         </div>
       )}
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {!name && (
-          <input
-            className="song-input"
-            placeholder="Your Name"
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-          />
-        )}
+        {!name && <input
+          className="song-input"
+          placeholder="Your Name"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+        />}
         {name && <div>👋 Welcome, {name}</div>}
       </div>
 
@@ -200,9 +197,7 @@ function MainQueueApp({ role }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button className="queue-button host-button" onClick={searchSong}>
-          🔍 Search
-        </button>
+        <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
 
       <div>
@@ -214,9 +209,7 @@ function MainQueueApp({ role }) {
                 <div className="title">{track.name}</div>
                 <div className="artists">{track.artists.join(', ')}</div>
               </div>
-              <button className="queue-button host-button" onClick={() => addSong(track)}>
-                ➕ Add
-              </button>
+              <button className="queue-button host-button" onClick={() => addSong(track)}>➕ Add</button>
             </li>
           ))}
         </ul>
@@ -225,11 +218,7 @@ function MainQueueApp({ role }) {
       <h2>Now Playing</h2>
       {nowPlaying && (
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-          <img
-            src={nowPlaying.album?.images[0]?.url || ''}
-            alt={nowPlaying.trackName}
-            style={{ width: 64, height: 64, marginRight: 10 }}
-          />
+          <img src={nowPlaying.album?.images[0]?.url || ''} alt={nowPlaying.trackName} style={{ width: 64, height: 64, marginRight: 10 }} />
           <div>
             <div>{nowPlaying.trackName}</div>
             <div style={{ fontSize: 12, color: '#555' }}>
@@ -244,15 +233,9 @@ function MainQueueApp({ role }) {
       <ul>
         {queue.map((item, index) => (
           <li key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-            <img
-              src={item.album?.images[0]?.url || ''}
-              alt={item.trackName || item.song}
-              style={{ width: 64, height: 64, marginRight: 10 }}
-            />
+            <img src={item.album?.images[0]?.url || ''} alt={item.trackName || item.song} style={{ width: 64, height: 64, marginRight: 10 }} />
             <div>
-              <div>
-                {item.trackName || item.song} by {item.artists.join(', ')}
-              </div>
+              <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
               <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
             </div>
           </li>

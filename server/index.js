@@ -28,8 +28,6 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
-let pollInterval = null;
-
 // skip lock
 let skipLock = false;
 
@@ -161,13 +159,11 @@ async function playNextSong(manual = false) {
     if (!next) {
       isPlaying = false;
       nowPlaying = null;
-      clearInterval(pollInterval);
-      io.emit('queueUpdate', { queue, nowPlaying, isPlaying });
+      io.emit('queueUpdate', { queue, nowPlaying });
       return;
     }
   }
-
-  if (nowPlaying) history.push(nowPlaying);
+  if (nowPlaying) history.push(nowPlaying); // save current song to history
 
   nowPlaying = {
     trackName: next.trackName,
@@ -177,7 +173,7 @@ async function playNextSong(manual = false) {
     album: next.album
   };
   isPlaying = true;
-  io.emit('queueUpdate', { queue, nowPlaying, isPlaying });
+  io.emit('queueUpdate', { queue, nowPlaying });
 
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
@@ -186,19 +182,14 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // clear any previous poll
-    if (pollInterval) clearInterval(pollInterval);
-
-    pollInterval = setInterval(async () => {
-      if (!isPlaying) return; // stop auto-next if paused
-
+    const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
         if (!player || !player.item) {
-          clearInterval(pollInterval);
+          clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
-          io.emit('queueUpdate', { queue, nowPlaying, isPlaying });
+          io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
 
@@ -206,15 +197,15 @@ async function playNextSong(manual = false) {
         const duration = player.item.duration_ms;
 
         if (progress >= duration - 1000 && isPlaying) {
-          clearInterval(pollInterval);
+          clearInterval(poll);
           playNextSong();
         }
       } catch (err) {
         console.error('Polling error:', err);
-        clearInterval(pollInterval);
+        clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
-        io.emit('queueUpdate', { queue, nowPlaying, isPlaying });
+        io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
 
@@ -222,7 +213,7 @@ async function playNextSong(manual = false) {
     console.error('Failed to play song:', err);
     isPlaying = false;
     nowPlaying = null;
-    io.emit('queueUpdate', { queue, nowPlaying, isPlaying });
+    io.emit('queueUpdate', { queue, nowPlaying });
   }
 }
 
@@ -240,10 +231,22 @@ app.post('/play', async (req, res) => {
 // Host Pause/Resume
 app.post('/host/pause', async (req, res) => {
   try {
-    await togglePlayback();
+    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+
+    if (!player || !player.is_playing) {
+      // Resume playback
+      await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+      isPlaying = true;
+    } else {
+      // Pause playback
+      await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
+      isPlaying = false;
+    }
+
+    io.emit('queueUpdate', { queue, nowPlaying });
     res.json({ message: 'Toggled playback', isPlaying });
   } catch (err) {
-    console.error('Toggle playback failed:', err);
+    console.error('Host pause failed:', err);
     res.status(500).json({ error: 'Failed to toggle playback' });
   }
 });
@@ -282,6 +285,26 @@ app.post('/pause', async (req, res) => {
   } catch (err) {
     console.error('Pause failed:', err);
     res.status(500).json({ error: 'Failed to pause' });
+  }
+});
+
+// Resume Spotify (generic)
+app.post('/resume', async (req, res) => {
+  try {
+    if (!nowPlaying) return res.status(400).json({ error: 'No song to resume' });
+
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: [nowPlaying.song] }),
+    });
+
+    isPlaying = true;
+    io.emit('queueUpdate', { queue, nowPlaying });
+    res.json({ message: 'Playback resumed', nowPlaying });
+  } catch (err) {
+    console.error('Resume failed:', err);
+    res.status(500).json({ error: 'Failed to resume' });
   }
 });
 
@@ -329,26 +352,6 @@ async function fetchAutoplaySong() {
     console.error('Failed to fetch autoplay song:', err);
     return null;
   }
-}
-
-
-async function togglePlayback() {
-  const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-  if (!player) return;
-
-  if (player.is_playing) {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-    isPlaying = false;
-  } else {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [nowPlaying.song] }),
-    });
-    isPlaying = true;
-  }
-
-  io.emit('queueUpdate', { queue, nowPlaying, isPlaying });
 }
 
 const http = require('http');
