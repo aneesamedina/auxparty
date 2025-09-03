@@ -231,13 +231,18 @@ app.post('/play', async (req, res) => {
 // Host Pause/Resume
 app.post('/host/pause', async (req, res) => {
   try {
-    if (isPlaying) {
-      await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-      isPlaying = false;
-    } else {
+    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+
+    if (!player || !player.is_playing) {
+      // Resume playback
       await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
       isPlaying = true;
+    } else {
+      // Pause playback
+      await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
+      isPlaying = false;
     }
+
     io.emit('queueUpdate', { queue, nowPlaying });
     res.json({ message: 'Toggled playback', isPlaying });
   } catch (err) {
