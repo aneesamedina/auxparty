@@ -94,14 +94,15 @@ function MainQueueApp({ role }) {
     const s = io(API_URL, { withCredentials: true });
     setSocket(s);
 
-    // Listen for real-time updates
+    // Listen for real-time queue updates
     s.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
 
-    s.on('pauseUpdate', (paused) => {
-      setIsPaused(paused);
+    // Listen for playback toggle updates
+    s.on('playbackToggled', ({ isPlaying }) => {
+      setIsPaused(!isPlaying); // If playing, button shows "Pause"; if paused, shows "Resume"
     });
 
     return () => s.disconnect();
