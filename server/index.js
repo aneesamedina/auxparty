@@ -291,8 +291,16 @@ app.post('/pause', async (req, res) => {
 // Resume Spotify (generic)
 app.post('/resume', async (req, res) => {
   try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+    if (!nowPlaying) return res.status(400).json({ error: 'No song to resume' });
+
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: [nowPlaying.song] }),
+    });
+
     isPlaying = true;
+    io.emit('queueUpdate', { queue, nowPlaying });
     res.json({ message: 'Playback resumed', nowPlaying });
   } catch (err) {
     console.error('Resume failed:', err);
