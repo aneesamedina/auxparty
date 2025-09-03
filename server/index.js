@@ -1,12 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
 const querystring = require('querystring');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const sessions = {}; // sessionId -> { name, role }
-
 const app = express();
 const PORT = process.env.PORT || 3001;
 const redirect_uri = process.env.SPOTIFY_REDIRECT_URI;
@@ -28,10 +26,9 @@ let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
 
-// skip lock
-let skipLock = false;
-
+// ----------------------
 // Spotify Auth
+// ----------------------
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
   const authUrl = 'https://accounts.spotify.com/authorize?' + querystring.stringify({
@@ -68,6 +65,9 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
+// ----------------------
+// Helpers
+// ----------------------
 async function refreshAccessToken() {
   if (!refreshToken) throw new Error('No refresh token available');
   const res = await fetch('https://accounts.spotify.com/api/token', {
@@ -100,12 +100,40 @@ async function spotifyFetch(url, options = {}, retry = true) {
   return text ? JSON.parse(text) : null;
 }
 
+async function getActiveDevice() {
+  const data = await spotifyFetch('https://api.spotify.com/v1/me/player/devices');
+  const active = data.devices.find(d => d.is_active) || data.devices[0];
+  if (!active) throw new Error('No available device');
+  return active.id;
+}
+
+async function fetchAutoplaySong() {
+  try {
+    const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
+    if (!data.items || data.items.length === 0) return null;
+    const track = data.items[autoplayIndex % data.items.length].track;
+    autoplayIndex++;
+    return {
+      name: 'Autoplay',
+      song: track.uri,
+      trackName: track.name,
+      artists: track.artists.map(a => a.name),
+      album: { name: track.album.name, images: track.album.images }
+    };
+  } catch (err) {
+    console.error('Failed to fetch autoplay song:', err);
+    return null;
+  }
+}
+
+// ----------------------
+// Queue management
+// ----------------------
 app.post('/login', (req, res) => {
   const { name, role } = req.body;
   if (!name || !role || !['host','guest'].includes(role)) {
     return res.status(400).json({ error: 'Missing or invalid name/role' });
   }
-
   const sessionId = Math.random().toString(36).substring(2, 15);
   sessions[sessionId] = { name, role };
   res.json({ sessionId, name, role });
@@ -127,17 +155,10 @@ app.post('/queue', async (req, res) => {
       song: uri,
       trackName: trackData.name,
       artists: trackData.artists.map(a => a.name),
-      album: {
-        name: trackData.album.name,
-        images: trackData.album.images
-      }
+      album: { name: trackData.album.name, images: trackData.album.images }
     };
     queue.push(newItem);
-
-    if (!nowPlaying) {
-      playNextSong();
-    }
-
+    if (!nowPlaying) await playNextSong();
     res.json({ queue, nowPlaying });
   } catch (err) {
     console.error('Failed to add song:', err);
@@ -145,23 +166,16 @@ app.post('/queue', async (req, res) => {
   }
 });
 
-async function playNextSong(manual = false) {
-  if (skipLock) return;
-  skipLock = true;
-  setTimeout(() => skipLock = false, 1000);
-
-  let next;
-
-  if (queue.length > 0) {
-    next = queue.shift();
-  } else {
-    next = await fetchAutoplaySong();
-    if (!next) {
-      isPlaying = false;
-      nowPlaying = null;
-      io.emit('queueUpdate', { queue, nowPlaying });
-      return;
-    }
+// ----------------------
+// Playback helpers
+// ----------------------
+async function playNextSong() {
+  let next = queue.length > 0 ? queue.shift() : await fetchAutoplaySong();
+  if (!next) {
+    isPlaying = false;
+    nowPlaying = null;
+    io.emit('queueUpdate', { queue, nowPlaying });
+    return;
   }
 
   nowPlaying = {
@@ -175,83 +189,62 @@ async function playNextSong(manual = false) {
   io.emit('queueUpdate', { queue, nowPlaying });
 
   try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+    const deviceId = await getActiveDevice();
+    await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uris: [next.song] }),
+      body: JSON.stringify({ uris: [next.song] })
     });
-
-    // Poll to check song end, only advance when song finishes and isPlaying
-    const poll = setInterval(async () => {
-      try {
-        const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-        if (!player || !player.item) {
-          clearInterval(poll);
-          isPlaying = false;
-          nowPlaying = null;
-          io.emit('queueUpdate', { queue, nowPlaying });
-          return;
-        }
-
-        const progress = player.progress_ms;
-        const duration = player.item.duration_ms;
-
-        if (progress >= duration - 1000 && isPlaying) {
-          clearInterval(poll);
-          playNextSong();
-        }
-      } catch (err) {
-        console.error('Polling error:', err);
-        clearInterval(poll);
-        isPlaying = false;
-        nowPlaying = null;
-        io.emit('queueUpdate', { queue, nowPlaying });
-      }
-    }, 2000);
-
   } catch (err) {
-    console.error('Failed to play song:', err);
+    console.error('Failed to play next song:', err);
     isPlaying = false;
     nowPlaying = null;
     io.emit('queueUpdate', { queue, nowPlaying });
   }
 }
 
-// Skip/Next
-app.post('/play', async (req, res) => {
+// ----------------------
+// Pause / Resume / Next routes
+// ----------------------
+app.post('/pause', async (req, res) => {
   try {
-    await playNextSong(true);
+    const deviceId = await getActiveDevice();
+    await spotifyFetch(`https://api.spotify.com/v1/me/player/pause?device_id=${deviceId}`, { method: 'PUT' });
+    isPlaying = false;
+    io.emit('queueUpdate', { queue, nowPlaying });
+    res.json({ message: 'Playback paused' });
+  } catch (err) {
+    console.error('Pause failed:', err);
+    res.status(500).json({ error: 'Failed to pause playback' });
+  }
+});
+
+app.post('/resume', async (req, res) => {
+  try {
+    const deviceId = await getActiveDevice();
+    await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, { method: 'PUT' });
+    isPlaying = true;
+    io.emit('queueUpdate', { queue, nowPlaying });
+    res.json({ message: 'Playback resumed' });
+  } catch (err) {
+    console.error('Resume failed:', err);
+    res.status(500).json({ error: 'Failed to resume playback' });
+  }
+});
+
+app.post('/next', async (req, res) => {
+  try {
+    await playNextSong();
     res.json({ message: 'Skipped to next song', queue, nowPlaying });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to play next song' });
+    res.status(500).json({ error: 'Failed to skip' });
   }
 });
 
-// Pause Spotify
-app.post('/pause', async (req, res) => {
-  try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-    isPlaying = false;
-    res.json({ message: 'Playback paused', nowPlaying });
-  } catch (err) {
-    console.error('Pause failed:', err);
-    res.status(500).json({ error: 'Failed to pause' });
-  }
-});
-
-// Resume Spotify
-app.post('/resume', async (req, res) => {
-  try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
-    isPlaying = true;
-    res.json({ message: 'Playback resumed', nowPlaying });
-  } catch (err) {
-    console.error('Resume failed:', err);
-    res.status(500).json({ error: 'Failed to resume' });
-  }
-});
-
+// ----------------------
+// Search
+// ----------------------
 app.get('/search', async (req, res) => {
   const q = req.query.q;
   if (!q) return res.status(400).json({ error: 'Query required' });
@@ -262,60 +255,24 @@ app.get('/search', async (req, res) => {
       name: track.name,
       artists: track.artists.map(a => a.name),
       uri: track.uri,
-      album: {
-        name: track.album.name,
-        images: track.album.images
-      }
+      album: { name: track.album.name, images: track.album.images }
     }));
     res.json({ tracks });
   } catch (err) {
     console.error('Search failed:', err);
-    res.status(500).json({ error: 'Failed to search Spotify' });
+    res.status(500).json({ error: 'Search failed' });
   }
 });
 
-async function fetchAutoplaySong() {
-  try {
-    const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
-    if (!data.items || data.items.length === 0) return null;
-
-    const track = data.items[autoplayIndex % data.items.length].track;
-    autoplayIndex++;
-
-    return {
-      name: 'Autoplay',
-      song: track.uri,
-      trackName: track.name,
-      artists: track.artists.map(a => a.name),
-      album: {
-        name: track.album.name,
-        images: track.album.images
-      }
-    };
-  } catch (err) {
-    console.error('Failed to fetch autoplay song:', err);
-    return null;
-  }
-}
-
-const http = require('http');
+// ----------------------
+// Socket.io for queue updates
+// ----------------------
+const server = require('http').createServer(app);
 const { Server } = require('socket.io');
-
-const server = http.createServer(app);
-
-const io = new Server(server, {
-  cors: {
-    origin: 'https://auxparty-pied.vercel.app',
-    methods: ['GET','POST'],
-    credentials: true,
-  }
-});
-
-io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
-  socket.emit('testMessage', { msg: 'Hello from server!' });
-  socket.emit('queueUpdate', { queue, nowPlaying });
-  socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
-});
+const io = new Server(server, { cors: { origin: '*', methods: ['GET','POST'] } });
 
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+io.on('connection', (socket) => {
+  socket.emit('queueUpdate', { queue, nowPlaying });
+});
