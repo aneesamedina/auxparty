@@ -21,6 +21,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
+let history = []; // store songs that have already played
 let accessToken = null;
 let refreshToken = null;
 let queue = [];
@@ -162,6 +163,7 @@ async function playNextSong(manual = false) {
       return;
     }
   }
+  if (nowPlaying) history.push(nowPlaying); // save current song to history
 
   nowPlaying = {
     trackName: next.trackName,
@@ -246,23 +248,26 @@ app.post('/host/pause', async (req, res) => {
 
 // Host Previous
 app.post('/host/previous', async (req, res) => {
+  if (history.length === 0) {
+    return res.status(400).json({ error: 'No previous song in history' });
+  }
+
+  const previousSong = history.pop();
+  if (nowPlaying) queue.unshift(nowPlaying); // optional: put current song back in front
+  nowPlaying = previousSong;
+
   try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/previous', { method: 'POST' });
-    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-    nowPlaying = player.item
-      ? {
-          trackName: player.item.name,
-          song: player.item.uri,
-          artists: player.item.artists.map(a => a.name),
-          album: player.item.album,
-          addedBy: 'Host',
-        }
-      : null;
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: [previousSong.song] }),
+    });
+
     io.emit('queueUpdate', { queue, nowPlaying });
-    res.json({ message: 'Played previous track', nowPlaying });
+    res.json({ message: 'Playing previous song', nowPlaying });
   } catch (err) {
-    console.error('Host previous failed:', err);
-    res.status(500).json({ error: 'Failed to play previous track' });
+    console.error('Previous failed:', err);
+    res.status(500).json({ error: 'Failed to play previous song' });
   }
 });
 
