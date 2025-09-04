@@ -277,14 +277,28 @@ app.post('/host/previous', async (req, res) => {
 });
 
 // Pause Spotify (generic)
-app.post('/pause', async (req, res) => {
+app.post('/host/pause', async (req, res) => {
   try {
-    await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-    isPlaying = false;
-    res.json({ message: 'Playback paused', nowPlaying });
+    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
+
+    if (!player) return res.status(500).json({ error: 'No active playback' });
+
+    if (player.is_playing) {
+      await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
+    } else {
+      await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+    }
+
+    // Fetch the updated state after toggling
+    const updatedPlayer = await spotifyFetch('https://api.spotify.com/v1/me/player');
+    const newIsPlaying = updatedPlayer?.is_playing || false;
+    isPlaying = newIsPlaying;
+
+    io.emit('queueUpdate', { queue, nowPlaying });
+    res.json({ message: 'Toggled playback', isPlaying: newIsPlaying });
   } catch (err) {
-    console.error('Pause failed:', err);
-    res.status(500).json({ error: 'Failed to pause' });
+    console.error('Host pause failed:', err);
+    res.status(500).json({ error: 'Failed to toggle playback' });
   }
 });
 
