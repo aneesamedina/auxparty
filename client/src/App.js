@@ -80,7 +80,6 @@ function LoginPage({ onSelectRole }) {
   );
 }
 
-export default LoginPage;
 
 // -------------------
 // Main Queue App Component
