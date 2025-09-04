@@ -6,7 +6,6 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 // Login Page Component
 // -------------------
-import React from 'react';
 
 function LoginPage({ onSelectRole }) {
   // Host verification before switching to host page
