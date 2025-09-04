@@ -116,7 +116,7 @@ function MainQueueApp({ role }) {
 
   const playNext = async () => {
     try {
-      const res = await fetch(`${API_URL}/host/next`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(`${API_URL}/play`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setNowPlaying(normalizeNowPlaying(data.nowPlaying));
