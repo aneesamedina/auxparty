@@ -10,34 +10,27 @@ const API_URL = process.env.REACT_APP_API_URL;
 function LoginPage({ onSelectRole }) {
   const [loading, setLoading] = useState(false);
 
-  const handleHostClick = async () => {
-    setLoading(true);
-    try {
-      // 1️⃣ Create session / login
-      const loginRes = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'HostName', role: 'host' }), // replace 'HostName' as needed
-      });
+  const handleHostClick = () => {
+    setLoading(true); // show loading state
+    const loginWindow = window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
 
-      const loginData = await loginRes.json();
-      localStorage.setItem('sessionId', loginData.sessionId);
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/verify-host`, {
+          credentials: 'include', // ensures session cookie is sent
+        });
+        const data = await res.json();
 
-      // 2️⃣ Verify host
-      const verifyRes = await fetch(`${API_URL}/verify-host?sessionId=${loginData.sessionId}`);
-      const verifyData = await verifyRes.json();
-
-      if (verifyRes.ok) {
-        onSelectRole('host');
-      } else {
-        alert(verifyData.error || 'Host verification failed');
+        if (res.ok && data.verified) {
+          clearInterval(interval);
+          onSelectRole('host'); // mark as host in app
+          loginWindow.close(); // close OAuth tab
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Error verifying host:', err);
       }
-    } catch (err) {
-      console.error(err);
-      alert('Host login/verification failed');
-    } finally {
-      setLoading(false);
-    }
+    }, 1000);
   };
 
   return (
@@ -64,7 +57,7 @@ function LoginPage({ onSelectRole }) {
           onClick={handleHostClick}
           disabled={loading}
         >
-          {loading ? 'Verifying...' : 'Host (Spotify)'}
+          {loading ? 'Logging in...' : 'Host (Spotify)'}
         </button>
         <button
           className="role-button guest-button"
@@ -74,6 +67,7 @@ function LoginPage({ onSelectRole }) {
           Guest
         </button>
       </div>
+
       <style>{`
         @keyframes gradientAnimation {
           0%{background-position:0% 50%}
@@ -94,6 +88,10 @@ function LoginPage({ onSelectRole }) {
         .role-button:hover {
           box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
           transform: scale(1.05);
+        }
+        .role-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
       `}</style>
     </div>
@@ -175,19 +173,6 @@ function MainQueueApp({ role }) {
     });
     return () => socket.disconnect();
   }, []);
-
-
-  //Verify host
-  useEffect(() => {
-    if (role === 'host') {
-      const verifyHost = async () => {
-        const sessionId = localStorage.getItem('sessionId');
-        const res = await fetch(`${API_URL}/verify-host?sessionId=${sessionId}`);
-        if (!res.ok) window.location.href = '/';
-      };
-      verifyHost();
-    }
-  }, [role]);
 
   
   // -------------------
