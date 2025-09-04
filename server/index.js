@@ -335,6 +335,22 @@ app.get('/search', async (req, res) => {
   }
 });
 
+// Add this for host verification
+app.get('/verify-host', (req, res) => {
+  const sessionId = req.query.sessionId;
+  const session = sessions[sessionId];
+
+  if (!session) {
+    return res.status(401).json({ error: 'Invalid session' });
+  }
+
+  if (session.role !== 'host') {
+    return res.status(403).json({ error: 'Not a host' });
+  }
+
+  res.json({ message: 'Verified as host', name: session.name });
+});
+
 async function fetchAutoplaySong() {
   try {
     const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);

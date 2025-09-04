@@ -6,10 +6,28 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 // Login Page Component
 // -------------------
+import React from 'react';
+
+const API_URL = process.env.REACT_APP_API_URL;
+
 function LoginPage({ onSelectRole }) {
-  const handleHostLogin = () => {
-    window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
-    onSelectRole('host');
+  // Host verification before switching to host page
+  const handleHostClick = async () => {
+    const sessionId = localStorage.getItem('sessionId'); // adjust if you store it differently
+
+    try {
+      const res = await fetch(`${API_URL}/verify-host?sessionId=${sessionId}`);
+      const data = await res.json();
+
+      if (res.ok) {
+        onSelectRole('host'); // Verified, switch to host page
+      } else {
+        alert(data.error || 'You are not a host!');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Host verification failed');
+    }
   };
 
   return (
@@ -31,7 +49,7 @@ function LoginPage({ onSelectRole }) {
       <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <button className="role-button host-button" onClick={handleHostLogin}>
+        <button className="role-button host-button" onClick={handleHostClick}>
           Host (Spotify)
         </button>
         <button className="role-button guest-button" onClick={() => onSelectRole('guest')}>
@@ -63,6 +81,8 @@ function LoginPage({ onSelectRole }) {
     </div>
   );
 }
+
+export default LoginPage;
 
 // -------------------
 // Main Queue App Component
@@ -139,6 +159,20 @@ function MainQueueApp({ role }) {
     return () => socket.disconnect();
   }, []);
 
+
+  //Verify host
+  useEffect(() => {
+    if (role === 'host') {
+      const verifyHost = async () => {
+        const sessionId = localStorage.getItem('sessionId');
+        const res = await fetch(`${API_URL}/verify-host?sessionId=${sessionId}`);
+        if (!res.ok) window.location.href = '/';
+      };
+      verifyHost();
+    }
+  }, [role]);
+
+  
   // -------------------
   // Polling fallback
   // -------------------
