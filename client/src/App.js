@@ -6,31 +6,10 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 // Login Page Component
 // -------------------
-
 function LoginPage({ onSelectRole }) {
-  const [loading, setLoading] = useState(false);
-
-  const handleHostClick = () => {
-    setLoading(true); // show loading state
-    const loginWindow = window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${API_URL}/verify-host`, {
-          credentials: 'include', // ensures session cookie is sent
-        });
-        const data = await res.json();
-
-        if (res.ok && data.verified) {
-          clearInterval(interval);
-          onSelectRole('host'); // mark as host in app
-          loginWindow.close(); // close OAuth tab
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Error verifying host:', err);
-      }
-    }, 1000);
+  const handleHostLogin = () => {
+    window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
+    onSelectRole('host');
   };
 
   return (
@@ -52,22 +31,13 @@ function LoginPage({ onSelectRole }) {
       <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <button
-          className="role-button host-button"
-          onClick={handleHostClick}
-          disabled={loading}
-        >
-          {loading ? 'Logging in...' : 'Host (Spotify)'}
+        <button className="role-button host-button" onClick={handleHostLogin}>
+          Host (Spotify)
         </button>
-        <button
-          className="role-button guest-button"
-          onClick={() => onSelectRole('guest')}
-          disabled={loading}
-        >
+        <button className="role-button guest-button" onClick={() => onSelectRole('guest')}>
           Guest
         </button>
       </div>
-
       <style>{`
         @keyframes gradientAnimation {
           0%{background-position:0% 50%}
@@ -89,15 +59,10 @@ function LoginPage({ onSelectRole }) {
           box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
           transform: scale(1.05);
         }
-        .role-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
       `}</style>
     </div>
   );
 }
-
 
 // -------------------
 // Main Queue App Component
@@ -174,7 +139,6 @@ function MainQueueApp({ role }) {
     return () => socket.disconnect();
   }, []);
 
-  
   // -------------------
   // Polling fallback
   // -------------------

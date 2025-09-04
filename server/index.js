@@ -228,28 +228,6 @@ app.post('/play', async (req, res) => {
   }
 });
 
-// Host Pause/Resume
-app.post('/host/pause', async (req, res) => {
-  try {
-    const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-
-    if (!player || !player.is_playing) {
-      // Resume playback
-      await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
-      isPlaying = true;
-    } else {
-      // Pause playback
-      await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-      isPlaying = false;
-    }
-
-    io.emit('queueUpdate', { queue, nowPlaying });
-    res.json({ message: 'Toggled playback', isPlaying });
-  } catch (err) {
-    console.error('Host pause failed:', err);
-    res.status(500).json({ error: 'Failed to toggle playback' });
-  }
-});
 
 // Host Previous
 app.post('/host/previous', async (req, res) => {
@@ -333,22 +311,6 @@ app.get('/search', async (req, res) => {
     console.error('Search failed:', err);
     res.status(500).json({ error: 'Failed to search Spotify' });
   }
-});
-
-// Add this for host verification
-app.get('/verify-host', (req, res) => {
-  const sessionId = req.query.sessionId;
-  const session = sessions[sessionId];
-
-  if (!session) {
-    return res.status(401).json({ error: 'Invalid session' });
-  }
-
-  if (session.role !== 'host') {
-    return res.status(403).json({ error: 'Not a host' });
-  }
-
-  res.json({ message: 'Verified as host', name: session.name });
 });
 
 async function fetchAutoplaySong() {
