@@ -8,22 +8,35 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 
 function LoginPage({ onSelectRole }) {
-  // Host verification before switching to host page
+  const [loading, setLoading] = useState(false);
+
   const handleHostClick = async () => {
-    const sessionId = localStorage.getItem('sessionId'); // adjust if you store it differently
-
+    setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/verify-host?sessionId=${sessionId}`);
-      const data = await res.json();
+      // 1️⃣ Create session / login
+      const loginRes = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'HostName', role: 'host' }), // replace 'HostName' as needed
+      });
 
-      if (res.ok) {
-        onSelectRole('host'); // Verified, switch to host page
+      const loginData = await loginRes.json();
+      localStorage.setItem('sessionId', loginData.sessionId);
+
+      // 2️⃣ Verify host
+      const verifyRes = await fetch(`${API_URL}/verify-host?sessionId=${loginData.sessionId}`);
+      const verifyData = await verifyRes.json();
+
+      if (verifyRes.ok) {
+        onSelectRole('host');
       } else {
-        alert(data.error || 'You are not a host!');
+        alert(verifyData.error || 'Host verification failed');
       }
     } catch (err) {
       console.error(err);
-      alert('Host verification failed');
+      alert('Host login/verification failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -46,10 +59,18 @@ function LoginPage({ onSelectRole }) {
       <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <button className="role-button host-button" onClick={handleHostClick}>
-          Host (Spotify)
+        <button
+          className="role-button host-button"
+          onClick={handleHostClick}
+          disabled={loading}
+        >
+          {loading ? 'Verifying...' : 'Host (Spotify)'}
         </button>
-        <button className="role-button guest-button" onClick={() => onSelectRole('guest')}>
+        <button
+          className="role-button guest-button"
+          onClick={() => onSelectRole('guest')}
+          disabled={loading}
+        >
           Guest
         </button>
       </div>
