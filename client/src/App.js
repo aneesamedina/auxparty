@@ -108,12 +108,13 @@ function MainQueueApp({ role }) {
       const endpoint = isPaused ? 'host/resume' : 'host/pause';
       const res = await fetch(`${API_URL}/${endpoint}`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+      // Instead of blindly flipping, set it explicitly
       setIsPaused(!isPaused);
     } catch (err) {
       console.error('Error toggling pause:', err);
     }
   };
-
   const playNext = async () => {
     try {
       const res = await fetch(`${API_URL}/play`, { method: 'POST', credentials: 'include' });
