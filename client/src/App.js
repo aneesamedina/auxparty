@@ -283,37 +283,55 @@ function MainQueueApp({ role }) {
   };
 
   const addSong = async (track, force = false) => {
+    // Use name from state or draft
     const guestName = name || draftName.trim();
-    if (!guestName || !track) return alert('Enter your name first');
+    if (!guestName) return alert('Enter your name first');
+    if (!track) return alert('No track selected');
 
-    const alreadyPlayed = history.find(h => h.song === track.uri);
-    const alreadyQueued = queue.find(q => q.song === track.uri);
-    const isNowPlaying = nowPlaying && nowPlaying.song === track.uri; // 🔹 check now playing
+    // Normalize track to ensure `uri` exists
+    const trackUri = track.uri || track.id;
+    const trackArtists = Array.isArray(track.artists)
+      ? track.artists.map(a => (typeof a === 'string' ? a : a.name))
+      : [typeof track.artists === 'string' ? track.artists : track.artists?.name || 'Unknown Artist'];
+    const normalizedTrack = { ...track, uri: trackUri, artists: trackArtists };
 
+    // Check if song already exists
+    const alreadyPlayed = history.some(h => h.song === trackUri);
+    const alreadyQueued = queue.some(q => q.song === trackUri);
+    const isNowPlaying = nowPlaying?.song === trackUri;
+
+    // Show modal if duplicate and not forced
     if (!force && (alreadyPlayed || alreadyQueued || isNowPlaying)) {
-      setForceModalTrack(track); // show modal
+      console.log('Duplicate detected, showing modal:', normalizedTrack);
+      setForceModalTrack(normalizedTrack);
       return;
     }
 
+    // Proceed to add song
     try {
       const res = await fetch(`${API_URL}/queue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: guestName, song: track.uri, force }),
+        body: JSON.stringify({ name: guestName, song: trackUri, force }),
         credentials: 'include',
       });
 
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
 
       const data = await res.json();
-      setQueue(data.queue);
-      setNowPlaying(prev => prev || data.nowPlaying);
+      setQueue(data.queue || []);
+      setNowPlaying(prev => prev || normalizeNowPlaying(data.nowPlaying));
       setResults([]);
       setSearch('');
+
+      // Save guest name locally
       if (!name) {
         setName(guestName);
         localStorage.setItem('guestName', guestName);
       }
+
+      // Close modal if open
+      setForceModalTrack(null);
     } catch (err) {
       console.error('Error adding song:', err);
       alert('Failed to add song');
@@ -531,9 +549,11 @@ function MainQueueApp({ role }) {
       <ForceAddModal
         track={forceModalTrack}
         onCancel={() => setForceModalTrack(null)}
-        onConfirm={() => {
-          if (forceModalTrack) addSong(forceModalTrack, true); // retry with force=true
-          setForceModalTrack(null);
+        onConfirm={async () => {
+          if (forceModalTrack) {
+            await addSong(forceModalTrack, true);
+            setForceModalTrack(null);
+          }
         }}
       />
     </div>
