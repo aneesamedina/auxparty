@@ -287,8 +287,9 @@ function MainQueueApp({ role }) {
 
     const alreadyPlayed = history.find(h => h.song === track.uri);
     const alreadyQueued = queue.find(q => q.song === track.uri);
+    const isNowPlaying = nowPlaying && nowPlaying.song === track.uri; // 🔹 check now playing
 
-    if (!force && (alreadyPlayed || alreadyQueued)) {
+    if (!force && (alreadyPlayed || alreadyQueued || isNowPlaying)) {
       setForceModalTrack(track); // show modal
       return;
     }
@@ -317,7 +318,6 @@ function MainQueueApp({ role }) {
       alert('Failed to add song');
     }
   };
-
   
   const removeSong = async (songUri) => {
     try {
