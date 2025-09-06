@@ -174,6 +174,12 @@ function MainQueueApp({ role }) {
   const [forceModalTrack, setForceModalTrack] = useState(null);
   const [history, setHistory] = useState([]);
 
+  useEffect(() => {
+    if (nowPlaying && !history.find(h => h.song === nowPlaying.song)) {
+      setHistory(prev => [...prev, nowPlaying]);
+    }
+  }, [nowPlaying]);
+
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
     return {
