@@ -223,6 +223,22 @@ function MainQueueApp({ role }) {
     }
   };
   
+  const removeSong = async (songUri) => {
+    try {
+      const res = await fetch(`${API_URL}/queue/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song: songUri }),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      setQueue(data.queue);
+    } catch (err) {
+      console.error('Error removing song:', err);
+    }
+  };
+
   const handleDragEnd = (result) => {
     if (!result.destination) return;
 
@@ -362,7 +378,7 @@ function MainQueueApp({ role }) {
           {(provided) => (
             <ul {...provided.droppableProps} ref={provided.innerRef}>
               {queue.map((item, index) => (
-                role === 'host' ? (
+                {role === 'host' ? (
                   <Draggable key={item.song} draggableId={item.song} index={index}>
                     {(provided) => (
                       <li
@@ -373,18 +389,25 @@ function MainQueueApp({ role }) {
                           display: 'flex',
                           alignItems: 'center',
                           marginBottom: 10,
+                          gap: 10,
                           ...provided.draggableProps.style
                         }}
                       >
                         <img
                           src={item.album?.images[0]?.url || ''}
                           alt={item.trackName || item.song}
-                          style={{ width: 64, height: 64, marginRight: 10 }}
+                          style={{ width: 64, height: 64 }}
                         />
-                        <div>
+                        <div style={{ flex: 1 }}>
                           <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
                           <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
                         </div>
+                        <button
+                          className="queue-button host-button"
+                          onClick={() => removeSong(item.song)}
+                        >
+                          ❌ Remove
+                        </button>
                       </li>
                     )}
                   </Draggable>

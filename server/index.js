@@ -169,6 +169,20 @@ app.post('/queue/reorder', (req, res) => {
   res.json({ queue });
 });
 
+app.post('/queue/remove', (req, res) => {
+  const { song } = req.body;
+  if (!song) return res.status(400).json({ error: 'Song is required' });
+
+  // Remove the song from the queue
+  // If you have sessions, find the correct session queue instead
+  queue = queue.filter(item => item.song !== song);
+
+  // Broadcast the updated queue via Socket.IO
+  io.emit('queueUpdate', { queue, nowPlaying: nowPlaying || null });
+
+  res.json({ queue });
+});
+
 async function playNextSong(manual = false) {
   if (skipLock) return;
   skipLock = true;
