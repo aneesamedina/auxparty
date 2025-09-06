@@ -277,7 +277,10 @@ function MainQueueApp({ role }) {
   const addSong = async (track, force = false) => {
     const guestName = name || draftName.trim();
     if (!guestName || !track) return alert('Enter your name first');
-
+    if (history.find(h => h.song === track.uri) || queue.find(q => q.song === track.uri)) {
+      setForceModalTrack(track);
+      return; // stop normal add
+    }
     try {
       const res = await fetch(`${API_URL}/queue`, {
         method: 'POST',
@@ -520,7 +523,7 @@ function MainQueueApp({ role }) {
           )}
         </Droppable>
       </DragDropContext>
-      
+
       <ForceAddModal
         track={forceModalTrack}
         onCancel={() => setForceModalTrack(null)}
