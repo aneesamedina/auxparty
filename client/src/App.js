@@ -65,8 +65,6 @@ function LoginPage({ onSelectRole }) {
   );
 }
 
-
-
 function HostPage() {
   const [sessionId, setSessionId] = useState(null);
 
@@ -84,6 +82,83 @@ function HostPage() {
   return <MainQueueApp role="host" sessionId={sessionId} />;
 }
 
+function ForceAddModal({ track, onCancel, onConfirm }) {
+  if (!track) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000
+    }}>
+      <div style={{
+        background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
+        backgroundSize: '400% 400%',
+        animation: 'gradientAnimation 15s ease infinite',
+        padding: 24,
+        borderRadius: 16,
+        color: '#fff',
+        maxWidth: 400,
+        textAlign: 'center',
+        boxShadow: '0 0 20px rgba(0,0,0,0.6)'
+      }}>
+        <h2 style={{ marginBottom: 12 }}>Song Already Added</h2>
+        <p style={{ fontSize: 14 }}>
+          "{track.trackName}" by {track.artists.join(', ')} is already in the queue or has been played.
+        </p>
+        <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-around', gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: '10px 0',
+              borderRadius: 12,
+              border: 'none',
+              cursor: 'pointer',
+              color: '#fff',
+              backgroundColor: '#303030ff',
+              fontWeight: 'bold',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.2)'}
+            onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: '10px 0',
+              borderRadius: 12,
+              border: 'none',
+              cursor: 'pointer',
+              color: '#fff',
+              backgroundColor: '#aaaaaaff',
+              fontWeight: 'bold',
+              transition: 'all 0.3s ease'
+            }}
+            onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.2)'}
+            onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
+          >
+            Add Anyway
+          </button>
+        </div>
+        <style>{`
+          @keyframes gradientAnimation {
+            0%{background-position:0% 50%}
+            50%{background-position:100% 50%}
+            100%{background-position:0% 50%}
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
 // -------------------
 // Main Queue App Component
 // -------------------
@@ -96,6 +171,7 @@ function MainQueueApp({ role }) {
   const [results, setResults] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [forceModalTrack, setForceModalTrack] = useState(null);
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
@@ -444,7 +520,17 @@ function MainQueueApp({ role }) {
           )}
         </Droppable>
       </DragDropContext>
+      
+      <ForceAddModal
+        track={forceModalTrack}
+        onCancel={() => setForceModalTrack(null)}
+        onConfirm={() => {
+          if (forceModalTrack) addSong(forceModalTrack, true);
+          setForceModalTrack(null);
+        }}
+      />
     </div>
+    
   );
 }
 
