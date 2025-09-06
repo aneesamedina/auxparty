@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-
+import { motion } from "framer-motion";
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -224,22 +224,27 @@ function MainQueueApp({ role }) {
   };
   
   const handleDragEnd = (result) => {
-    if (!result.destination) return; // dropped outside the list
+    if (!result.destination) return;
 
-    const updatedQueue = Array.from(queue);
-    const [movedItem] = updatedQueue.splice(result.source.index, 1);
-    updatedQueue.splice(result.destination.index, 0, movedItem);
+    const newQueue = Array.from(queue);
+    const [moved] = newQueue.splice(result.source.index, 1);
+    newQueue.splice(result.destination.index, 0, moved);
 
-    setQueue(updatedQueue);
+    // 🔹 Optimistically update UI
+    setQueue(newQueue);
 
-    // Optional: send updated order to backend
+    // 🔹 Send update to server
     fetch(`${API_URL}/queue/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ queue: updatedQueue.map(item => item.song) }),
-      credentials: 'include',
-    }).catch(err => console.error('Reorder failed:', err));
+      body: JSON.stringify({ queue: newQueue.map((item) => item.song) }),
+    }).catch((err) => {
+      console.error("Reorder failed:", err);
+      // Optional: rollback if server fails
+      setQueue(queue);
+    });
   };
+
   // -------------------
   // Render
   // -------------------
@@ -359,7 +364,9 @@ function MainQueueApp({ role }) {
               {queue.map((item, index) => (
                 <Draggable key={item.song} draggableId={item.song} index={index}>
                   {(provided) => (
-                    <li
+                    <motion.li
+                      layout
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
                       ref={provided.innerRef}
                       {...provided.draggableProps}
                       {...provided.dragHandleProps}
@@ -379,7 +386,7 @@ function MainQueueApp({ role }) {
                         <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
                         <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
                       </div>
-                    </li>
+                    </motion.li>
                   )}
                 </Draggable>
               ))}
