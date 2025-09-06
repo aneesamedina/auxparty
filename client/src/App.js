@@ -108,7 +108,7 @@ function ForceAddModal({ track, onCancel, onConfirm }) {
       }}>
         <h2 style={{ marginBottom: 12 }}>Song Already Added</h2>
         <p style={{ fontSize: 14 }}>
-          "{track.trackName || track.name}" by {track.artists.join(', ')} is already in the queue or has been played.
+          "{track.trackName}" by {track.artists.join(', ')} is already in the queue or has been played.
         </p>
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-around', gap: 10 }}>
           <button
@@ -176,7 +176,7 @@ function MainQueueApp({ role }) {
 
   useEffect(() => {
     if (nowPlaying && !history.find(h => h.song === nowPlaying.song)) {
-      setHistory(prev => [...prev, nowPlaying]); // nowPlaying has 'song'
+      setHistory(prev => [...prev, nowPlaying]);
     }
   }, [nowPlaying]);
 
@@ -187,7 +187,6 @@ function MainQueueApp({ role }) {
       artists: Array.isArray(np.artists) ? np.artists : [np.artists],
       addedBy: np.addedBy || '',
       album: np.album,
-      song: np.uri, // <-- add this
     };
   };
 
@@ -283,60 +282,42 @@ function MainQueueApp({ role }) {
   };
 
   const addSong = async (track, force = false) => {
-    // Use name from state or draft
     const guestName = name || draftName.trim();
-    if (!guestName) return alert('Enter your name first');
-    if (!track) return alert('No track selected');
+    if (!guestName || !track) return alert('Enter your name first');
 
-    // Normalize track to ensure `uri` exists
-    const trackUri = track.uri || track.id;
-    const trackArtists = Array.isArray(track.artists)
-      ? track.artists.map(a => (typeof a === 'string' ? a : a.name))
-      : [typeof track.artists === 'string' ? track.artists : track.artists?.name || 'Unknown Artist'];
-    const normalizedTrack = { ...track, uri: trackUri, artists: trackArtists };
+    const alreadyPlayed = history.find(h => h.song === track.uri);
+    const alreadyQueued = queue.find(q => q.song === track.uri);
 
-    // Check if song already exists
-    const alreadyPlayed = history.some(h => h.song === trackUri);
-    const alreadyQueued = queue.some(q => q.song === trackUri);
-    const isNowPlaying = nowPlaying?.song === trackUri;
-
-    // Show modal if duplicate and not forced
-    if (!force && (alreadyPlayed || alreadyQueued || isNowPlaying)) {
-      console.log('Duplicate detected, showing modal:', normalizedTrack);
-      setForceModalTrack(normalizedTrack);
+    if (!force && (alreadyPlayed || alreadyQueued)) {
+      setForceModalTrack(track); // show modal
       return;
     }
 
-    // Proceed to add song
     try {
       const res = await fetch(`${API_URL}/queue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: guestName, song: trackUri, force }),
+        body: JSON.stringify({ name: guestName, song: track.uri, force }),
         credentials: 'include',
       });
 
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
 
       const data = await res.json();
-      setQueue(data.queue || []);
-      setNowPlaying(prev => prev || normalizeNowPlaying(data.nowPlaying));
+      setQueue(data.queue);
+      setNowPlaying(prev => prev || data.nowPlaying);
       setResults([]);
       setSearch('');
-
-      // Save guest name locally
       if (!name) {
         setName(guestName);
         localStorage.setItem('guestName', guestName);
       }
-
-      // Close modal if open
-      setForceModalTrack(null);
     } catch (err) {
       console.error('Error adding song:', err);
       alert('Failed to add song');
     }
   };
+
   
   const removeSong = async (songUri) => {
     try {
@@ -549,11 +530,9 @@ function MainQueueApp({ role }) {
       <ForceAddModal
         track={forceModalTrack}
         onCancel={() => setForceModalTrack(null)}
-        onConfirm={async () => {
-          if (forceModalTrack) {
-            await addSong(forceModalTrack, true);
-            setForceModalTrack(null);
-          }
+        onConfirm={() => {
+          if (forceModalTrack) addSong(forceModalTrack, true); // retry with force=true
+          setForceModalTrack(null);
         }}
       />
     </div>
