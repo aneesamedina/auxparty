@@ -108,7 +108,7 @@ function ForceAddModal({ track, onCancel, onConfirm }) {
       }}>
         <h2 style={{ marginBottom: 12 }}>Song Already Added</h2>
         <p style={{ fontSize: 14 }}>
-          "{track.trackName}" by {track.artists.join(', ')} is already in the queue or has been played.
+          "{track.trackName || track.name}" by {track.artists.join(', ')} is already in the queue or has been played.
         </p>
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-around', gap: 10 }}>
           <button
@@ -173,6 +173,12 @@ function MainQueueApp({ role }) {
   const [isPaused, setIsPaused] = useState(false);
   const [forceModalTrack, setForceModalTrack] = useState(null);
   const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    if (nowPlaying && !history.find(h => h.song === nowPlaying.song)) {
+      setHistory(prev => [...prev, nowPlaying]);
+    }
+  }, [nowPlaying]);
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
