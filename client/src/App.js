@@ -172,6 +172,7 @@ function MainQueueApp({ role }) {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
   const [forceModalTrack, setForceModalTrack] = useState(null);
+  const [history, setHistory] = useState([]);
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
@@ -277,10 +278,15 @@ function MainQueueApp({ role }) {
   const addSong = async (track, force = false) => {
     const guestName = name || draftName.trim();
     if (!guestName || !track) return alert('Enter your name first');
-    if (history.find(h => h.song === track.uri) || queue.find(q => q.song === track.uri)) {
-      setForceModalTrack(track);
-      return; // stop normal add
+
+    const alreadyPlayed = history.find(h => h.song === track.uri);
+    const alreadyQueued = queue.find(q => q.song === track.uri);
+
+    if (!force && (alreadyPlayed || alreadyQueued)) {
+      setForceModalTrack(track); // show modal
+      return;
     }
+
     try {
       const res = await fetch(`${API_URL}/queue`, {
         method: 'POST',
@@ -289,32 +295,23 @@ function MainQueueApp({ role }) {
         credentials: 'include',
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        if (data.canForce) {
-          // Ask the user if they want to force-add
-          if (window.confirm(`${data.error} Do you want to add it anyway?`)) {
-            return addSong(track, true); // retry with force
-          }
-        } else {
-          return alert(data.error);
-        }
-      } else {
-        const data = await res.json();
-        setQueue(data.queue);
-        setNowPlaying((prev) => prev || data.nowPlaying);
-        setResults([]);
-        setSearch('');
-        if (!name) {
-          setName(guestName);
-          localStorage.setItem('guestName', guestName);
-        }
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+      const data = await res.json();
+      setQueue(data.queue);
+      setNowPlaying(prev => prev || data.nowPlaying);
+      setResults([]);
+      setSearch('');
+      if (!name) {
+        setName(guestName);
+        localStorage.setItem('guestName', guestName);
       }
     } catch (err) {
       console.error('Error adding song:', err);
       alert('Failed to add song');
     }
   };
+
   
   const removeSong = async (songUri) => {
     try {
@@ -528,7 +525,7 @@ function MainQueueApp({ role }) {
         track={forceModalTrack}
         onCancel={() => setForceModalTrack(null)}
         onConfirm={() => {
-          if (forceModalTrack) addSong(forceModalTrack, true);
+          if (forceModalTrack) addSong(forceModalTrack, true); // retry with force=true
           setForceModalTrack(null);
         }}
       />
