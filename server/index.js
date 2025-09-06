@@ -124,8 +124,22 @@ app.get('/queue', (req, res) => {
 });
 
 app.post('/queue', async (req, res) => {
-  const { name, song: uri } = req.body;
+  const { name, song: uri, force } = req.body;
   if (!name || !uri) return res.status(400).json({ error: 'Missing name or song URI' });
+
+  // Check duplicates or already played
+  const alreadyPlaying = nowPlaying?.song === uri;
+  const inQueue = queue.some(item => item.song === uri);
+  const inHistory = history.some(item => item.song === uri);
+
+  if (!force && (alreadyPlaying || inQueue || inHistory)) {
+    let errorMsg = '';
+    if (alreadyPlaying) errorMsg = 'This song is already playing!';
+    else if (inQueue) errorMsg = 'This song is already in the queue!';
+    else if (inHistory) errorMsg = 'This song has already been played!';
+
+    return res.status(400).json({ error: errorMsg, canForce: true }); // signal frontend that it can be forced
+  }
 
   try {
     const trackId = uri.split(':')[2];
@@ -146,6 +160,7 @@ app.post('/queue', async (req, res) => {
       playNextSong();
     }
 
+    io.emit('queueUpdate', { queue, nowPlaying });
     res.json({ queue, nowPlaying });
   } catch (err) {
     console.error('Failed to add song:', err);
