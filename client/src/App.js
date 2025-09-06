@@ -377,8 +377,8 @@ function MainQueueApp({ role }) {
         <Droppable droppableId="queue">
           {(provided) => (
             <ul {...provided.droppableProps} ref={provided.innerRef}>
-              {queue.map((item, index) => (
-                {role === 'host' ? (
+              {queue.map((item, index) =>
+                role === 'host' ? (
                   <Draggable key={item.song} draggableId={item.song} index={index}>
                     {(provided) => (
                       <li
@@ -424,10 +424,7 @@ function MainQueueApp({ role }) {
                     </div>
                   </li>
                 )
-              ))}
-              {provided.placeholder}
-            </ul>
-          )}
+              )}
         </Droppable>
       </DragDropContext>
     </div>
