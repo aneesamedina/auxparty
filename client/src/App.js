@@ -8,8 +8,7 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 function LoginPage({ onSelectRole }) {
   const handleHostLogin = () => {
-    window.open(`${API_URL}/login`, '_blank', 'noopener,noreferrer');
-    onSelectRole('host');
+  window.location.href = `${API_URL}/login`;
   };
 
   return (
@@ -62,6 +61,25 @@ function LoginPage({ onSelectRole }) {
       `}</style>
     </div>
   );
+}
+
+
+
+function HostPage() {
+  const [sessionId, setSessionId] = useState(null);
+
+  useEffect(() => {
+    // Extract sessionId from URL
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get('sessionId');
+    if (sid) setSessionId(sid);
+  }, []);
+
+  if (!sessionId) {
+    return <div>Waiting for Spotify login...</div>;
+  }
+
+  return <MainQueueApp role="host" sessionId={sessionId} />;
 }
 
 // -------------------
@@ -335,8 +353,17 @@ function MainQueueApp({ role }) {
 // -------------------
 function App() {
   const [role, setRole] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('sessionId')) {
+      setRole('host');
+    }
+  }, []);
+
   if (!role) return <LoginPage onSelectRole={setRole} />;
-  return <MainQueueApp role={role} />;
+  if (role === 'host') return <HostPage />;
+  return <MainQueueApp role="guest" />;
 }
 
 export default App;

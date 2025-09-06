@@ -46,6 +46,7 @@ app.get('/login', (req, res) => {
 app.get('/auth/callback', async (req, res) => {
   const code = req.query.code || null;
   try {
+    // Get Spotify tokens
     const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -59,9 +60,16 @@ app.get('/auth/callback', async (req, res) => {
       })
     });
     const data = await tokenRes.json();
+
     accessToken = data.access_token;
     refreshToken = data.refresh_token;
-    res.send('Logged in! You can now control playback.');
+
+    // Create host session AFTER Spotify OAuth
+    const sessionId = Math.random().toString(36).substring(2, 15);
+    sessions[sessionId] = { name: 'Host', role: 'host', verified: true };
+
+    // Redirect to frontend host page with sessionId
+    res.redirect(`https://auxparty-pied.vercel.app/host?sessionId=${sessionId}`);
   } catch (err) {
     console.error(err);
     res.status(500).send('Error during Spotify login.');
