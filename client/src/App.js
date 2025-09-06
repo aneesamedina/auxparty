@@ -425,6 +425,9 @@ function MainQueueApp({ role }) {
                   </li>
                 )
               )}
+              {provided.placeholder}
+            </ul>
+          )}
         </Droppable>
       </DragDropContext>
     </div>
