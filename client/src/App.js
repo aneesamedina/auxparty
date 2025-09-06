@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { motion } from "framer-motion";
+
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -357,38 +357,50 @@ function MainQueueApp({ role }) {
       )}
 
       <h2>Queue</h2>
-      <DragDropContext onDragEnd={handleDragEnd}>
+      DragDropContext onDragEnd={role === 'host' ? handleDragEnd : undefined}>
         <Droppable droppableId="queue">
           {(provided) => (
             <ul {...provided.droppableProps} ref={provided.innerRef}>
               {queue.map((item, index) => (
-                <Draggable key={item.song} draggableId={item.song} index={index}>
-                  {(provided) => (
-                    <motion.li
-                      layout
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      {...provided.dragHandleProps}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        marginBottom: 10,
-                        ...provided.draggableProps.style
-                      }}
-                    >
-                      <img
-                        src={item.album?.images[0]?.url || ''}
-                        alt={item.trackName || item.song}
-                        style={{ width: 64, height: 64, marginRight: 10 }}
-                      />
-                      <div>
-                        <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
-                        <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
-                      </div>
-                    </motion.li>
-                  )}
-                </Draggable>
+                role === 'host' ? (
+                  <Draggable key={item.song} draggableId={item.song} index={index}>
+                    {(provided) => (
+                      <li
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: 10,
+                          ...provided.draggableProps.style
+                        }}
+                      >
+                        <img
+                          src={item.album?.images[0]?.url || ''}
+                          alt={item.trackName || item.song}
+                          style={{ width: 64, height: 64, marginRight: 10 }}
+                        />
+                        <div>
+                          <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
+                          <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                        </div>
+                      </li>
+                    )}
+                  </Draggable>
+                ) : (
+                  <li key={item.song} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+                    <img
+                      src={item.album?.images[0]?.url || ''}
+                      alt={item.trackName || item.song}
+                      style={{ width: 64, height: 64, marginRight: 10 }}
+                    />
+                    <div>
+                      <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
+                      <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                    </div>
+                  </li>
+                )
               ))}
               {provided.placeholder}
             </ul>
