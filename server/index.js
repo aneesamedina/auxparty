@@ -153,6 +153,22 @@ app.post('/queue', async (req, res) => {
   }
 });
 
+app.post('/queue/reorder', (req, res) => {
+  const { queue: newOrder } = req.body;
+  if (!Array.isArray(newOrder)) return res.status(400).json({ error: 'Invalid queue' });
+
+  // Reorder existing queue based on song URIs
+  const reorderedQueue = [];
+  newOrder.forEach(uri => {
+    const item = queue.find(q => q.song === uri);
+    if (item) reorderedQueue.push(item);
+  });
+
+  queue = reorderedQueue;
+  io.emit('queueUpdate', { queue, nowPlaying });
+  res.json({ queue });
+});
+
 async function playNextSong(manual = false) {
   if (skipLock) return;
   skipLock = true;

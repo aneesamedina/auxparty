@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -220,7 +222,24 @@ function MainQueueApp({ role }) {
       console.error('Error adding song:', err);
     }
   };
+  
+  const handleDragEnd = (result) => {
+    if (!result.destination) return; // dropped outside the list
 
+    const updatedQueue = Array.from(queue);
+    const [movedItem] = updatedQueue.splice(result.source.index, 1);
+    updatedQueue.splice(result.destination.index, 0, movedItem);
+
+    setQueue(updatedQueue);
+
+    // Optional: send updated order to backend
+    fetch(`${API_URL}/queue/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queue: updatedQueue.map(item => item.song) }),
+      credentials: 'include',
+    }).catch(err => console.error('Reorder failed:', err));
+  };
   // -------------------
   // Render
   // -------------------
@@ -333,17 +352,42 @@ function MainQueueApp({ role }) {
       )}
 
       <h2>Queue</h2>
-      <ul>
-        {queue.map((item, index) => (
-          <li key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-            <img src={item.album?.images[0]?.url || ''} alt={item.trackName || item.song} style={{ width: 64, height: 64, marginRight: 10 }} />
-            <div>
-              <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
-              <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="queue">
+          {(provided) => (
+            <ul {...provided.droppableProps} ref={provided.innerRef}>
+              {queue.map((item, index) => (
+                <Draggable key={item.song} draggableId={item.song} index={index}>
+                  {(provided) => (
+                    <li
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        marginBottom: 10,
+                        ...provided.draggableProps.style
+                      }}
+                    >
+                      <img
+                        src={item.album?.images[0]?.url || ''}
+                        alt={item.trackName || item.song}
+                        style={{ width: 64, height: 64, marginRight: 10 }}
+                      />
+                      <div>
+                        <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
+                        <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                      </div>
+                    </li>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+            </ul>
+          )}
+        </Droppable>
+      </DragDropContext>
     </div>
   );
 }
