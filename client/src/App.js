@@ -176,7 +176,7 @@ function MainQueueApp({ role }) {
 
   useEffect(() => {
     if (nowPlaying && !history.find(h => h.song === nowPlaying.song)) {
-      setHistory(prev => [...prev, nowPlaying]);
+      setHistory(prev => [...prev, nowPlaying]); // nowPlaying has 'song'
     }
   }, [nowPlaying]);
 
@@ -187,6 +187,7 @@ function MainQueueApp({ role }) {
       artists: Array.isArray(np.artists) ? np.artists : [np.artists],
       addedBy: np.addedBy || '',
       album: np.album,
+      song: np.uri, // <-- add this
     };
   };
 
