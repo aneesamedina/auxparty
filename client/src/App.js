@@ -28,7 +28,7 @@ function LoginPage({ onSelectRole }) {
         animation: 'gradientAnimation 15s ease infinite',
         color: '#fff',
       }}
-    >
+    </div>
       <h1>Welcome to Aux Party</h1>
       <p>Select your role to continue:</p>
       <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20 }}>
