@@ -108,7 +108,7 @@ function ForceAddModal({ track, onCancel, onConfirm }) {
       }}>
         <h2 style={{ marginBottom: 12 }}>Song Already Added</h2>
         <p style={{ fontSize: 14 }}>
-          "{track.trackName}" by {track.artists.join(', ')} is already in the queue or has been played.
+          "{track.trackName || track.name}" by {track.artists.join(', ')} is already in the queue or has been played.
         </p>
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-around', gap: 10 }}>
           <button
