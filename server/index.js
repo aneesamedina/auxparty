@@ -27,9 +27,12 @@ let refreshToken = null;
 let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
+let voteCounts = {}; // songUri -> Set of userIds
 
 // skip lock
 let skipLock = false;
+//skip votes
+let skipVotes = new Set();
 
 // Spotify Auth
 app.get('/login', (req, res) => {
@@ -217,7 +220,10 @@ async function playNextSong(manual = false) {
     }
   }
   if (nowPlaying) history.push(nowPlaying); // save current song to history
+  if (voteCounts[nowPlaying.song]) delete voteCounts[nowPlaying.song];
 
+  skipVotes.clear();
+  
   nowPlaying = {
     trackName: next.trackName,
     song: next.song,
@@ -281,6 +287,42 @@ app.post('/play', async (req, res) => {
   }
 });
 
+
+//Skip vote
+app.post('/vote-skip', (req, res) => {
+  const { userId } = req.body; // optional if you want per-user tracking
+
+  if (!nowPlaying) return res.status(400).json({ error: 'No song playing' });
+
+  skipVotes.add(userId || Math.random()); // simple way to track unique votes
+
+  const requiredVotes = 2; // adjust threshold
+
+  if (skipVotes.size >= requiredVotes) {
+    skipVotes.clear();
+    playNextSong(true);
+    io.emit('voteUpdate', { votes: skipVotes.size, skipped: true });
+    return res.json({ message: 'Song skipped by vote' });
+  }
+
+  io.emit('voteUpdate', { votes: skipVotes.size });
+  res.json({ message: 'Vote registered', votes: skipVotes.size });
+});
+
+
+app.post('/vote-next', (req, res) => {
+  const { song, userId } = req.body;
+  if (!song) return res.status(400).json({ error: 'Song required' });
+
+  if (!voteCounts[song]) voteCounts[song] = new Set();
+  voteCounts[song].add(userId || Math.random());
+
+  // Update queue order by number of votes
+  queue.sort((a, b) => (voteCounts[b.song]?.size || 0) - (voteCounts[a.song]?.size || 0));
+
+  io.emit('queueUpdate', { queue, nowPlaying });
+  res.json({ message: 'Vote added', votes: voteCounts[song].size });
+});
 
 // Host Previous
 app.post('/host/previous', async (req, res) => {
@@ -363,6 +405,29 @@ app.get('/search', async (req, res) => {
   } catch (err) {
     console.error('Search failed:', err);
     res.status(500).json({ error: 'Failed to search Spotify' });
+  }
+});
+
+app.get('/now-playing', async (req, res) => {
+  try {
+    const data = await spotifyFetch('https://api.spotify.com/v1/me/player/currently-playing');
+    if (!data || !data.item) return res.json({ nowPlaying: null });
+
+    const track = data.item;
+    nowPlaying = {
+      trackName: track.name,
+      song: track.uri,
+      artists: track.artists.map(a => a.name),
+      album: {
+        name: track.album.name,
+        images: track.album.images
+      }
+    };
+
+    res.json({ nowPlaying });
+  } catch (err) {
+    console.error('Failed to fetch now playing:', err);
+    res.status(500).json({ error: 'Failed to fetch now playing' });
   }
 });
 
