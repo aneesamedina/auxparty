@@ -65,7 +65,7 @@ function LoginPage({ onSelectRole }) {
 }
 
 // -------------------
-// Host Page
+// Host Page Component
 // -------------------
 function HostPage() {
   const [sessionId, setSessionId] = useState(null);
@@ -76,23 +76,29 @@ function HostPage() {
     if (sid) setSessionId(sid);
   }, []);
 
-  if (!sessionId) return <div>Waiting for Spotify login...</div>;
+  if (!sessionId) {
+    return <div>Waiting for Spotify login...</div>;
+  }
 
   return <MainQueueApp role="host" sessionId={sessionId} />;
 }
 
 // -------------------
-// Main Queue App
+// Main Queue App Component
 // -------------------
 function MainQueueApp({ role }) {
   const [queue, setQueue] = useState([]);
   const [name, setName] = useState(() => localStorage.getItem('guestName') || '');
   const [draftName, setDraftName] = useState('');
+  const [song, setSong] = useState('');
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
+
+  // 👇 Added vote states
   const [skipVotes, setSkipVotes] = useState(0);
+  const [nextVotes, setNextVotes] = useState({}); // songUri -> number of votes
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
@@ -110,17 +116,20 @@ function MainQueueApp({ role }) {
   const playPrevious = async () => {
     try {
       const res = await fetch(`${API_URL}/host/previous`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setNowPlaying(normalizeNowPlaying(data.nowPlaying));
       if (data.queue) setQueue(data.queue);
     } catch (err) {
       console.error('Error playing previous:', err);
+      alert('No previous track available or failed to skip.');
     }
   };
 
   const togglePause = async () => {
     try {
       const res = await fetch(`${API_URL}/host/pause`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setIsPaused(!data.isPlaying);
     } catch (err) {
@@ -131,6 +140,7 @@ function MainQueueApp({ role }) {
   const playNext = async () => {
     try {
       const res = await fetch(`${API_URL}/play`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setNowPlaying(normalizeNowPlaying(data.nowPlaying));
       setQueue(data.queue);
@@ -141,61 +151,69 @@ function MainQueueApp({ role }) {
   };
 
   // -------------------
-  // Socket.IO setup
+  // Guest vote functions
+  // -------------------
+  const voteSkip = async () => {
+    try {
+      const res = await fetch(`${API_URL}/vote-skip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: name || draftName }),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      setSkipVotes(data.votes || 0);
+      if (data.skipped) setSkipVotes(0);
+    } catch (err) {
+      console.error('Vote skip failed:', err);
+    }
+  };
+
+  const voteNext = async (songUri) => {
+    try {
+      const res = await fetch(`${API_URL}/vote-next`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song: songUri, userId: name || draftName }),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      setNextVotes((prev) => ({ ...prev, [songUri]: data.votes }));
+    } catch (err) {
+      console.error('Vote next failed:', err);
+    }
+  };
+
+  // -------------------
+  // Socket.IO for real-time updates
   // -------------------
   useEffect(() => {
     const socket = io(API_URL, { withCredentials: true });
-
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
-
-    socket.on('voteUpdate', (data) => {
-      if (data.skipped) {
-        setSkipVotes(0);
-      } else {
-        setSkipVotes(data.votes || 0);
-      }
+    socket.on('voteUpdate', ({ votes }) => {
+      setSkipVotes(votes);
     });
-
-    return () => {
-      socket.disconnect();
-      socket.off('queueUpdate');
-      socket.off('voteUpdate');
-    };
+    return () => socket.disconnect();
   }, []);
 
   // -------------------
-  // Detect Now Playing (for host resume)
-  // -------------------
-  useEffect(() => {
-    if (role === 'host') {
-      const fetchNowPlaying = async () => {
-        try {
-          const res = await fetch(`${API_URL}/now-playing`, { credentials: 'include' });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.nowPlaying) setNowPlaying(normalizeNowPlaying(data.nowPlaying));
-          }
-        } catch (err) {
-          console.error('Error fetching current song:', err);
-        }
-      };
-      fetchNowPlaying();
-    }
-  }, [role]);
-
-  // -------------------
-  // Polling Fallback
+  // Polling fallback
   // -------------------
   useEffect(() => {
     const fetchQueue = async () => {
       try {
         const res = await fetch(`${API_URL}/queue`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
-        setQueue(data.queue || []);
-        setNowPlaying(normalizeNowPlaying(data.nowPlaying));
+        setQueue(JSON.stringify(queue) !== JSON.stringify(data.queue) ? data.queue : queue);
+        setNowPlaying(
+          JSON.stringify(nowPlaying) !== JSON.stringify(data.nowPlaying)
+            ? normalizeNowPlaying(data.nowPlaying)
+            : nowPlaying
+        );
       } catch (err) {
         console.error('Error fetching queue:', err);
       }
@@ -203,7 +221,7 @@ function MainQueueApp({ role }) {
     fetchQueue();
     const interval = setInterval(fetchQueue, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [queue, nowPlaying]);
 
   // -------------------
   // Search & Add Songs
@@ -212,8 +230,9 @@ function MainQueueApp({ role }) {
     if (!search) return;
     try {
       const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(search)}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
-      setResults(data.tracks || []);
+      setResults(Array.isArray(data.tracks) ? data.tracks : []);
     } catch (err) {
       console.error('Error searching:', err);
     }
@@ -221,7 +240,7 @@ function MainQueueApp({ role }) {
 
   const addSong = async (track, force = false) => {
     const guestName = name || draftName.trim();
-    if (!guestName) return alert('Enter your name first');
+    if (!guestName || !track) return alert('Enter your name first');
 
     try {
       const res = await fetch(`${API_URL}/queue`, {
@@ -231,22 +250,29 @@ function MainQueueApp({ role }) {
         credentials: 'include',
       });
 
-      const data = await res.json();
       if (!res.ok) {
-        if (data.canForce && window.confirm(`${data.error} Add anyway?`)) return addSong(track, true);
-        else return alert(data.error);
-      }
-
-      setQueue(data.queue);
-      setNowPlaying((prev) => prev || data.nowPlaying);
-      setResults([]);
-      setSearch('');
-      if (!name) {
-        setName(guestName);
-        localStorage.setItem('guestName', guestName);
+        const data = await res.json();
+        if (data.canForce) {
+          if (window.confirm(`${data.error} Do you want to add it anyway?`)) {
+            return addSong(track, true);
+          }
+        } else {
+          return alert(data.error);
+        }
+      } else {
+        const data = await res.json();
+        setQueue(data.queue);
+        setNowPlaying((prev) => prev || data.nowPlaying);
+        setResults([]);
+        setSearch('');
+        if (!name) {
+          setName(guestName);
+          localStorage.setItem('guestName', guestName);
+        }
       }
     } catch (err) {
       console.error('Error adding song:', err);
+      alert('Failed to add song');
     }
   };
 
@@ -258,6 +284,7 @@ function MainQueueApp({ role }) {
         body: JSON.stringify({ song: songUri }),
         credentials: 'include',
       });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setQueue(data.queue);
     } catch (err) {
@@ -265,57 +292,87 @@ function MainQueueApp({ role }) {
     }
   };
 
-  // -------------------
-  // Voting
-  // -------------------
-  const voteToSkip = async () => {
-    try {
-      await fetch(`${API_URL}/vote-skip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ song: nowPlaying?.trackName }),
-        credentials: 'include',
-      });
-    } catch (err) {
-      console.error('Vote skip failed:', err);
-    }
-  };
-
-  const voteToPlayNext = async (song) => {
-    try {
-      await fetch(`${API_URL}/vote-next`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ song }),
-        credentials: 'include',
-      });
-    } catch (err) {
-      console.error('Vote next failed:', err);
-    }
-  };
-
-  // -------------------
-  // Drag & Drop reorder
-  // -------------------
   const handleDragEnd = (result) => {
     if (!result.destination) return;
+
     const newQueue = Array.from(queue);
     const [moved] = newQueue.splice(result.source.index, 1);
     newQueue.splice(result.destination.index, 0, moved);
+
     setQueue(newQueue);
 
     fetch(`${API_URL}/queue/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ queue: newQueue.map((item) => item.song) }),
-    }).catch((err) => console.error('Reorder failed:', err));
+    }).catch((err) => {
+      console.error("Reorder failed:", err);
+      setQueue(queue);
+    });
   };
 
   // -------------------
   // Render
   // -------------------
   return (
-    <div style={{ minHeight: '100vh', padding: 20, color: '#fff' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        padding: 20,
+        background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
+        backgroundSize: '400% 400%',
+        animation: 'gradientAnimation 15s ease infinite',
+        color: '#fff',
+      }}
+    >
+      <style>{`
+        @keyframes gradientAnimation {
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
+        }
+        .queue-button, .role-button {
+          padding: 8px 20px;
+          font-size: 16px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          color: #fff;
+          transition: all 0.2s ease;
+        }
+        .queue-button:hover, .role-button:hover {
+          transform: scale(1.05);
+          box-shadow: 0 0 15px rgba(255,255,255,0.6);
+          filter: brightness(1.1);
+        }
+        .host-button { background-color: #aaaaaaff; }
+        .guest-button { background-color: #303030ff; }
+        .song-input {
+          padding: 8px 12px;
+          font-size: 16px;
+          border-radius: 8px;
+          border: none;
+          margin-right: 8px;
+        }
+        .song-item {
+          display: flex;
+          align-items: center;
+          margin-bottom: 10px;
+          gap: 10px;
+        }
+        .song-item img {
+          width: 64px;
+          height: 64px;
+          border-radius: 8px;
+        }
+        .song-info {
+          display: flex;
+          flex-direction: column;
+        }
+        .song-info .title { font-weight: bold; font-size: 16px; }
+        .song-info .artists, .song-info .added-by { font-size: 12px; color: #eee; }
+      `}</style>
+
       <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
       {role === 'host' && (
@@ -328,20 +385,13 @@ function MainQueueApp({ role }) {
         </div>
       )}
 
-      {role === 'guest' && nowPlaying && (
-        <div style={{ marginBottom: 20 }}>
-          <button className="queue-button guest-button" onClick={voteToSkip}>🚫 Vote to Skip</button>
-          <div>Votes: {skipVotes}</div>
-        </div>
-      )}
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {!name && <input className="song-input" placeholder="Your Name" value={draftName} onChange={(e) => setDraftName(e.target.value)} />}
+        {name && <span>👋 Welcome, {name}</span>}
+      </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <input
-          className="song-input"
-          placeholder="Search Spotify"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input className="song-input" placeholder="Search Spotify" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
 
@@ -353,7 +403,7 @@ function MainQueueApp({ role }) {
               <div className="title">{track.name}</div>
               <div className="artists">{track.artists.join(', ')}</div>
             </div>
-            <button className="queue-button host-button" onClick={() => addSong(track)}>➕ Add</button>
+            <button className="queue-button host-button" onClick={() => addSong(track)}>➕ Add to Queue</button>
           </li>
         ))}
       </ul>
@@ -364,8 +414,10 @@ function MainQueueApp({ role }) {
           <img src={nowPlaying.album?.images[0]?.url || ''} alt={nowPlaying.trackName} style={{ width: 64, height: 64, marginRight: 10 }} />
           <div>
             <div>{nowPlaying.trackName}</div>
-            <div style={{ fontSize: 12 }}>{nowPlaying.artists.join(', ')}</div>
-            {nowPlaying.addedBy && <p>Added by {nowPlaying.addedBy}</p>}
+            <div style={{ fontSize: 12, color: '#555' }}>
+              {nowPlaying.artists.join(', ')}
+              {nowPlaying.addedBy && <p>Added by {nowPlaying.addedBy}</p>}
+            </div>
           </div>
         </div>
       )}
@@ -379,25 +431,66 @@ function MainQueueApp({ role }) {
                 role === 'host' ? (
                   <Draggable key={item.song} draggableId={item.song} index={index}>
                     {(provided) => (
-                      <li ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, ...provided.draggableProps.style }}>
-                        <img src={item.album?.images[0]?.url || ''} alt={item.trackName} style={{ width: 64, height: 64 }} />
+                      <li
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginBottom: 10,
+                          gap: 10,
+                          ...provided.draggableProps.style
+                        }}
+                      >
+                        <img
+                          src={item.album?.images[0]?.url || ''}
+                          alt={item.trackName || item.song}
+                          style={{ width: 64, height: 64 }}
+                        />
                         <div style={{ flex: 1 }}>
-                          <div>{item.trackName} by {item.artists.join(', ')}</div>
-                          <div style={{ fontSize: 12 }}>Added by {item.name}</div>
+                          <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
+                          <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
                         </div>
-                        <button className="queue-button host-button" onClick={() => removeSong(item.song)}>❌ Remove</button>
+                        <button
+                          className="queue-button host-button"
+                          onClick={() => removeSong(item.song)}
+                        >
+                          ❌ Remove
+                        </button>
                       </li>
                     )}
                   </Draggable>
                 ) : (
-                  <li key={item.song} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-                    <img src={item.album?.images[0]?.url || ''} alt={item.trackName} style={{ width: 64, height: 64, marginRight: 10 }} />
-                    <div style={{ flex: 1 }}>
-                      <div>{item.trackName} by {item.artists.join(', ')}</div>
-                      <div style={{ fontSize: 12 }}>Added by {item.name}</div>
+                  <li key={item.song} style={{ display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <img
+                        src={item.album?.images[0]?.url || ''}
+                        alt={item.trackName || item.song}
+                        style={{ width: 64, height: 64 }}
+                      />
+                      <div>
+                        <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
+                        <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                      </div>
                     </div>
-                    <button className="queue-button guest-button" onClick={() => voteToPlayNext(item.song)}>👍 Vote to Play Next</button>
+                    {/* 👇 Guest vote buttons */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <button
+                        className="queue-button guest-button"
+                        onClick={() => voteNext(item.song)}
+                      >
+                        ⬆ Vote Next ({nextVotes[item.song] || 0})
+                      </button>
+                      {index === 0 && (
+                        <button
+                          className="queue-button guest-button"
+                          onClick={voteSkip}
+                        >
+                          ⏭ Vote Skip ({skipVotes})
+                        </button>
+                      )}
+                    </div>
                   </li>
                 )
               )}
@@ -411,14 +504,16 @@ function MainQueueApp({ role }) {
 }
 
 // -------------------
-// Main App Wrapper
+// Main App Component
 // -------------------
 function App() {
   const [role, setRole] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('sessionId')) setRole('host');
+    if (params.get('sessionId')) {
+      setRole('host');
+    }
   }, []);
 
   if (!role) return <LoginPage onSelectRole={setRole} />;
