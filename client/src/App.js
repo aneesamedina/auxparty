@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
+
 const API_URL = process.env.REACT_APP_API_URL;
 
 // -------------------
@@ -9,7 +10,7 @@ const API_URL = process.env.REACT_APP_API_URL;
 // -------------------
 function LoginPage({ onSelectRole }) {
   const handleHostLogin = () => {
-    window.location.href = `${API_URL}/login`;
+  window.location.href = `${API_URL}/login`;
   };
 
   return (
@@ -64,10 +65,13 @@ function LoginPage({ onSelectRole }) {
   );
 }
 
+
+
 function HostPage() {
   const [sessionId, setSessionId] = useState(null);
 
   useEffect(() => {
+    // Extract sessionId from URL
     const params = new URLSearchParams(window.location.search);
     const sid = params.get('sessionId');
     if (sid) setSessionId(sid);
@@ -144,54 +148,14 @@ function MainQueueApp({ role }) {
   };
 
   // -------------------
-  // Vote Functions
-  // -------------------
-  const voteSkip = async () => {
-    try {
-      const res = await fetch(`${API_URL}/vote-skip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: name || draftName }),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      alert(`Vote registered. ${data.votes || 0} votes now.`);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const voteNext = async (songUri) => {
-    try {
-      const res = await fetch(`${API_URL}/vote-next`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ song: songUri, userId: name || draftName }),
-        credentials: 'include',
-      });
-      const data = await res.json();
-      alert(`Vote added to "${songUri}". ${data.votes} votes now.`);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // -------------------
   // Socket.IO for real-time updates
   // -------------------
   useEffect(() => {
     const socket = io(API_URL, { withCredentials: true });
-    
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
-
-    socket.on('voteUpdate', ({ votes, skipped }) => {
-      if (skipped) alert('Song skipped by vote!');
-      else console.log('Votes for skip:', votes);
-    });
-
     return () => socket.disconnect();
   }, []);
 
@@ -249,8 +213,9 @@ function MainQueueApp({ role }) {
       if (!res.ok) {
         const data = await res.json();
         if (data.canForce) {
+          // Ask the user if they want to force-add
           if (window.confirm(`${data.error} Do you want to add it anyway?`)) {
-            return addSong(track, true);
+            return addSong(track, true); // retry with force
           }
         } else {
           return alert(data.error);
@@ -271,7 +236,7 @@ function MainQueueApp({ role }) {
       alert('Failed to add song');
     }
   };
-
+  
   const removeSong = async (songUri) => {
     try {
       const res = await fetch(`${API_URL}/queue/remove`, {
@@ -295,14 +260,17 @@ function MainQueueApp({ role }) {
     const [moved] = newQueue.splice(result.source.index, 1);
     newQueue.splice(result.destination.index, 0, moved);
 
+    // 🔹 Optimistically update UI
     setQueue(newQueue);
 
+    // 🔹 Send update to server
     fetch(`${API_URL}/queue/reorder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ queue: newQueue.map((item) => item.song) }),
     }).catch((err) => {
       console.error("Reorder failed:", err);
+      // Optional: rollback if server fails
       setQueue(queue);
     });
   };
@@ -321,6 +289,54 @@ function MainQueueApp({ role }) {
         color: '#fff',
       }}
     >
+      <style>{`
+        @keyframes gradientAnimation {
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
+        }
+        .queue-button, .role-button {
+          padding: 8px 20px;
+          font-size: 16px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          color: #fff;
+          transition: all 0.2s ease;
+        }
+        .queue-button:hover, .role-button:hover {
+          transform: scale(1.05);
+          box-shadow: 0 0 15px rgba(255,255,255,0.6);
+          filter: brightness(1.1);
+        }
+        .host-button { background-color: #aaaaaaff; }
+        .guest-button { background-color: #303030ff; }
+        .song-input {
+          padding: 8px 12px;
+          font-size: 16px;
+          border-radius: 8px;
+          border: none;
+          margin-right: 8px;
+        }
+        .song-item {
+          display: flex;
+          align-items: center;
+          margin-bottom: 10px;
+          gap: 10px;
+        }
+        .song-item img {
+          width: 64px;
+          height: 64px;
+          border-radius: 8px;
+        }
+        .song-info {
+          display: flex;
+          flex-direction: column;
+        }
+        .song-info .title { font-weight: bold; font-size: 16px; }
+        .song-info .artists, .song-info .added-by { font-size: 12px; color: #eee; }
+      `}</style>
+
       <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
       {role === 'host' && (
@@ -330,7 +346,6 @@ function MainQueueApp({ role }) {
             {isPaused ? '▶ Resume' : '⏸ Pause'}
           </button>
           <button className="queue-button host-button" onClick={playNext}>Next</button>
-          <button className="queue-button host-button" onClick={voteSkip}>⏭ Vote Skip</button>
         </div>
       )}
 
@@ -401,8 +416,12 @@ function MainQueueApp({ role }) {
                           <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
                           <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
                         </div>
-                        <button className="queue-button host-button" onClick={() => removeSong(item.song)}>❌ Remove</button>
-                        <button className="queue-button host-button" onClick={() => voteNext(item.song)}>👍 Vote Next</button>
+                        <button
+                          className="queue-button host-button"
+                          onClick={() => removeSong(item.song)}
+                        >
+                          ❌ Remove
+                        </button>
                       </li>
                     )}
                   </Draggable>
