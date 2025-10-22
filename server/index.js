@@ -292,7 +292,7 @@ async function playNextSong(manual = false) {
     addedBy: next.name,
     album: next.album
   };
-  skipVotes.clear();
+  skipVotes = {};
   playNextVotes = {};
   io.emit('voteUpdate', { type: 'skip', votes: 0 });
   io.emit('voteUpdate', { type: 'playnext', votes: 0, song: nowPlaying.song });
