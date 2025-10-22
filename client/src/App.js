@@ -60,20 +60,6 @@ function LoginPage({ onSelectRole }) {
           box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
           transform: scale(1.05);
         }
-        .vote-button {
-          background-color: #b3bcc7ff;
-          padding: 3px 8px;
-          font-size: 12px;
-          border-radius: 6px;
-          min-width: 60px;
-          white-space: nowrap;
-        }
-
-        .vote-button:hover {
-          transform: scale(1.05);
-          box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
-          filter: brightness(1.1);
-        }
       `}</style>
     </div>
   );
@@ -496,10 +482,10 @@ function MainQueueApp({ role }) {
                     </div>
 
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="queue-button vote-button" onClick={() => voteSkip()}>
+                      <button className="queue-button guest-button" onClick={() => voteSkip()}>
                         ⏭ Vote Skip ({skipVotesCount})
                       </button>
-                      <button className="queue-button vote-button" onClick={() => votePlayNext(item.song)}>
+                      <button className="queue-button guest-button" onClick={() => votePlayNext(item.song)}>
                         🔝 Vote Play Next ({playNextVotesCount[item.song] || 0})
                       </button>
                     </div>

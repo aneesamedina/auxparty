@@ -190,8 +190,14 @@ app.post('/vote/skip', (req, res) => {
   io.emit('voteUpdate', { type: 'skip', votes });
 
   if (votes >= SKIP_MIN_VOTES) {
-    skipVotes.clear();
-    playNextSong(true);
+    // Remove the song from queue
+    queue = queue.filter(item => item.song !== song);
+
+    // Clear votes for that song
+    delete skipVotes[song];
+
+    // Update clients
+    io.emit('queueUpdate', { queue, nowPlaying });
   }
 
   res.json({ success: true, votes });
