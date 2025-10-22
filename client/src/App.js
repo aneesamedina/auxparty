@@ -61,7 +61,8 @@ function LoginPage({ onSelectRole }) {
           transform: scale(1.05);
         }
         .vote-button {
-          padding: 4px 8px;
+          background-color: #b3bcc7ff;
+          padding: 3px 8px;
           font-size: 12px;
           border-radius: 6px;
           min-width: 60px;
