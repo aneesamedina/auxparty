@@ -285,28 +285,21 @@ function MainQueueApp({ role }) {
   };
 
   const voteSkip = async () => {
-    if (!name) return alert('Enter your name first');
-    if (!nowPlaying) return alert('No song is currently playing');
-
-    try {
-      const res = await fetch(`${API_URL}/vote/skip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: name,
-          song: nowPlaying.song  // <-- send the current song
-        }),
-        credentials: 'include',
-      });
-
-      const data = await res.json();
-      if (!res.ok) return alert(data.error);
-
-      setSkipVotesCount(data.votes);
-    } catch (err) {
-      console.error('Vote skip error:', err);
-    }
-  };
+  if (!name) return alert('Enter your name first');
+  try {
+    const res = await fetch(`${API_URL}/vote/skip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: name }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error);
+    setSkipVotesCount(data.votes);
+  } catch (err) {
+    console.error('Vote skip error:', err);
+  }
+};
 
   const votePlayNext = async (songUri) => {
     if (!name) return alert('Enter your name first');

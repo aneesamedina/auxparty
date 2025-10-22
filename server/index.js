@@ -32,7 +32,7 @@ let isPlaying = false;
 let skipLock = false;
 
 //skip votes
-let skipVotes = {};
+let skipVotes = new Set();
 let playNextVotes = {}; // { songUri: Set(userIds) }
 
 const SKIP_MIN_VOTES = 2;      // change this to your desired number
@@ -176,22 +176,21 @@ app.post('/queue', async (req, res) => {
 });
 
 app.post('/vote/skip', (req, res) => {
-  const { userId, song } = req.body;
-  if (!userId || !song) return res.status(400).json({ error: 'Missing user ID or song' });
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Missing user ID' });
 
-  if (!skipVotes[song]) skipVotes[song] = new Set();
-
-  if (skipVotes[song].has(userId)) {
-    return res.status(400).json({ error: 'You already voted to skip this song.' });
+  // check if they already voted
+  if (skipVotes.has(userId)) {
+    return res.status(400).json({ error: 'You already voted to skip.' });
   }
 
-  skipVotes[song].add(userId);
-  const votes = skipVotes[song].size;
+  skipVotes.add(userId);
+  const votes = skipVotes.size;
 
-  io.emit('voteUpdate', { type: 'skip', song, votes });
+  io.emit('voteUpdate', { type: 'skip', votes });
 
   if (votes >= SKIP_MIN_VOTES) {
-    // Remove the song from the queue
+    // Remove the song from queue
     queue = queue.filter(item => item.song !== song);
 
     // Clear votes for that song
@@ -293,7 +292,7 @@ async function playNextSong(manual = false) {
     addedBy: next.name,
     album: next.album
   };
-  if (skipVotes[song]) delete skipVotes[song];
+  skipVotes.clear();
   playNextVotes = {};
   io.emit('voteUpdate', { type: 'skip', votes: 0 });
   io.emit('voteUpdate', { type: 'playnext', votes: 0, song: nowPlaying.song });
