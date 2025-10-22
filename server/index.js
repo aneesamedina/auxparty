@@ -195,9 +195,10 @@ app.post('/vote/skip', (req, res) => {
     queue = queue.filter(item => item.song !== song);
 
     // Clear votes for that song
-    delete skipVotes[song];
+    skipVotes[song] = new Set();
 
     io.emit('queueUpdate', { queue, nowPlaying });
+    io.emit('voteUpdate', { type: 'skip', song, votes: 0 });
   }
 
   res.json({ success: true, votes });
@@ -227,8 +228,9 @@ app.post('/vote/playnext', (req, res) => {
       queue.unshift(target);
     }
 
-    delete playNextVotes[song];
+    playNextVotes[song] = new Set();
     io.emit('queueUpdate', { queue, nowPlaying });
+    io.emit('voteUpdate', { type: 'playnext', song, votes: 0 });
   }
 
   res.json({ success: true, votes });
@@ -482,6 +484,13 @@ io.on('connection', (socket) => {
   socket.emit('testMessage', { msg: 'Hello from server!' });
   socket.emit('queueUpdate', { queue, nowPlaying });
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
+
+  Object.keys(skipVotes).forEach(song => {
+    socket.emit('voteUpdate', { type: 'skip', song, votes: skipVotes[song].size });
+  });
+  Object.keys(playNextVotes).forEach(song => {
+    socket.emit('voteUpdate', { type: 'playnext', song, votes: playNextVotes[song].size });
+  });
 });
 
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
