@@ -294,8 +294,8 @@ async function playNextSong(manual = false) {
   };
   skipVotes = {};
   playNextVotes = {};
-  io.emit('voteUpdate', { type: 'skip', votes: 0 });
-  io.emit('voteUpdate', { type: 'playnext', votes: 0, song: nowPlaying.song });
+  io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
+  io.emit('voteUpdate', { type: 'playnext', song: nowPlaying.song, votes: 0 });
 
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
