@@ -97,6 +97,9 @@ function MainQueueApp({ role }) {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
+  const [skipVotesCount, setSkipVotesCount] = useState(0);
+  const [playNextVotesCount, setPlayNextVotesCount] = useState({}); // { songUri: count }
+
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
     return {
@@ -155,6 +158,12 @@ function MainQueueApp({ role }) {
     socket.on('queueUpdate', ({ queue, nowPlaying }) => {
       setQueue(queue);
       setNowPlaying(normalizeNowPlaying(nowPlaying));
+    });
+    socket.on('voteUpdate', ({ type, song, votes }) => {
+      if (type === 'skip') setSkipVotesCount(votes);
+      if (type === 'playnext' && song) {
+        setPlayNextVotesCount(prev => ({ ...prev, [song]: votes }));
+      }
     });
     return () => socket.disconnect();
   }, []);
@@ -273,6 +282,41 @@ function MainQueueApp({ role }) {
       // Optional: rollback if server fails
       setQueue(queue);
     });
+  };
+
+  const voteSkip = async () => {
+  if (!name) return alert('Enter your name first');
+  try {
+    const res = await fetch(`${API_URL}/vote/skip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: name }),
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error);
+    setSkipVotesCount(data.votes);
+  } catch (err) {
+    console.error('Vote skip error:', err);
+  }
+};
+
+  const votePlayNext = async (songUri) => {
+    if (!name) return alert('Enter your name first');
+    try {
+      const res = await fetch(`${API_URL}/vote/playnext`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: name, song: songUri }),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+
+      setPlayNextVotesCount(prev => ({ ...prev, [songUri]: data.votes }));
+    } catch (err) {
+      console.error('Vote play-next error:', err);
+    }
   };
 
   // -------------------
@@ -435,6 +479,15 @@ function MainQueueApp({ role }) {
                     <div>
                       <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
                       <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="queue-button guest-button" onClick={() => voteSkip()}>
+                        ⏭ Vote Skip ({skipVotesCount})
+                      </button>
+                      <button className="queue-button guest-button" onClick={() => votePlayNext(item.song)}>
+                        🔝 Vote Play Next ({playNextVotesCount[item.song] || 0})
+                      </button>
                     </div>
                   </li>
                 )

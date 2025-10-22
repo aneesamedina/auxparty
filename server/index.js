@@ -31,6 +31,13 @@ let isPlaying = false;
 // skip lock
 let skipLock = false;
 
+//skip votes
+let skipVotes = new Set();
+let playNextVotes = {}; // { songUri: Set(userIds) }
+
+const SKIP_MIN_VOTES = 3;      // change this to your desired number
+const PLAYNEXT_MIN_VOTES = 4;  // for play-next voting
+
 // Spotify Auth
 app.get('/login', (req, res) => {
   const scope = 'user-modify-playback-state user-read-playback-state';
@@ -168,6 +175,60 @@ app.post('/queue', async (req, res) => {
   }
 });
 
+app.post('/vote/skip', (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'Missing user ID' });
+
+  // check if they already voted
+  if (skipVotes.has(userId)) {
+    return res.status(400).json({ error: 'You already voted to skip.' });
+  }
+
+  skipVotes.add(userId);
+  const votes = skipVotes.size;
+
+  io.emit('voteUpdate', { type: 'skip', votes });
+
+  if (votes >= SKIP_MIN_VOTES) {
+    skipVotes.clear();
+    playNextSong(true);
+  }
+
+  res.json({ success: true, votes });
+});
+
+
+app.post('/vote/playnext', (req, res) => {
+  const { userId, song } = req.body;
+  if (!userId || !song) return res.status(400).json({ error: 'Missing user or song' });
+
+  if (!playNextVotes[song]) playNextVotes[song] = new Set();
+
+  // check if they already voted for this song
+  if (playNextVotes[song].has(userId)) {
+    return res.status(400).json({ error: 'You already voted for this song.' });
+  }
+
+  playNextVotes[song].add(userId);
+  const votes = playNextVotes[song].size;
+
+  io.emit('voteUpdate', { type: 'playnext', song, votes });
+
+  if (votes >= PLAYNEXT_MIN_VOTES) {
+    const targetIndex = queue.findIndex(q => q.song === song);
+    if (targetIndex !== -1) {
+      const [target] = queue.splice(targetIndex, 1);
+      queue.unshift(target);
+    }
+
+    delete playNextVotes[song];
+    io.emit('queueUpdate', { queue, nowPlaying });
+  }
+
+  res.json({ success: true, votes });
+});
+
+
 app.post('/queue/reorder', (req, res) => {
   const { queue: newOrder } = req.body;
   if (!Array.isArray(newOrder)) return res.status(400).json({ error: 'Invalid queue' });
@@ -225,8 +286,15 @@ async function playNextSong(manual = false) {
     addedBy: next.name,
     album: next.album
   };
+  skipVotes.clear();
+  playNextVotes = {};
+  io.emit('voteUpdate', { type: 'skip', votes: 0 });
+  io.emit('voteUpdate', { type: 'playnext', votes: 0, song: nowPlaying.song });
+
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
+
+
 
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
