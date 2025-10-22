@@ -111,8 +111,16 @@ async function spotifyFetch(url, options = {}, retry = true) {
     await refreshAccessToken();
     return spotifyFetch(url, options, false);
   }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  if (res.status === 204) return null; // No Content, e.g., pause success with empty body
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const json = await res.json();
+      return json;
+    } else {
+      const text = await res.text();
+      // Return text or throw error if you want
+      return text;
+    }
 }
 
 app.post('/login', (req, res) => {
