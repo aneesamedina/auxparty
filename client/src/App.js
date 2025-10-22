@@ -284,22 +284,22 @@ function MainQueueApp({ role }) {
     });
   };
 
-  const voteSkip = async () => {
-  if (!name) return alert('Enter your name first');
-  try {
-    const res = await fetch(`${API_URL}/vote/skip`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: name }),
-      credentials: 'include',
-    });
-    const data = await res.json();
-    if (!res.ok) return alert(data.error);
-    setSkipVotesCount(data.votes);
-  } catch (err) {
-    console.error('Vote skip error:', err);
-  }
-};
+  const voteSkip = async (songUri) => {
+    if (!name) return alert('Enter your name first');
+    try {
+      const res = await fetch(`${API_URL}/vote/skip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: name, song: songUri }),
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      setSkipVotesCount(prev => ({ ...prev, [songUri]: data.votes }));
+    } catch (err) {
+      console.error('Vote skip error:', err);
+    }
+  };
 
   const votePlayNext = async (songUri) => {
     if (!name) return alert('Enter your name first');
@@ -482,8 +482,8 @@ function MainQueueApp({ role }) {
                     </div>
 
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="queue-button guest-button" onClick={() => voteSkip()}>
-                        ⏭ Vote Skip ({skipVotesCount})
+                      <button className="queue-button guest-button" onClick={() => voteSkip(item.song)}>
+                        ⏭ Vote Skip ({skipVotesCount[item.song] || 0})
                       </button>
                       <button className="queue-button guest-button" onClick={() => votePlayNext(item.song)}>
                         🔝 Vote Play Next ({playNextVotesCount[item.song] || 0})
