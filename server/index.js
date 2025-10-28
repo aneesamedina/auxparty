@@ -190,10 +190,12 @@ app.post('/vote/skip', (req, res) => {
   if (!skipVotes[song]) skipVotes[song] = new Set();
 
   if (skipVotes[song].has(userId)) {
-    return res.status(400).json({ error: 'You already voted to skip this song.' });
+    // User already voted → rescind vote
+    skipVotes[song].delete(userId);
+  } else {
+    // Add vote
+    skipVotes[song].add(userId);
   }
-
-  skipVotes[song].add(userId);
   const votes = skipVotes[song].size;
 
   io.emit('voteUpdate', { type: 'skip', song, votes });
@@ -221,10 +223,11 @@ app.post('/vote/playnext', (req, res) => {
 
   // check if they already voted for this song
   if (playNextVotes[song].has(userId)) {
-    return res.status(400).json({ error: 'You already voted for this song.' });
+    playNextVotes[song].delete(userId);
+  } else{
+    playNextVotes[song].add(userId);
   }
 
-  playNextVotes[song].add(userId);
   const votes = playNextVotes[song].size;
 
   io.emit('voteUpdate', { type: 'playnext', song, votes });
