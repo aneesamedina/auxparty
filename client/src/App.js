@@ -160,7 +160,9 @@ function MainQueueApp({ role }) {
       setNowPlaying(normalizeNowPlaying(nowPlaying));
     });
     socket.on('voteUpdate', ({ type, song, votes }) => {
-      if (type === 'skip') setSkipVotesCount(votes);
+      if (type === 'skip' && song) {
+        setSkipVotesCount(prev => ({ ...prev, [song]: votes }));
+      }
       if (type === 'playnext' && song) {
         setPlayNextVotesCount(prev => ({ ...prev, [song]: votes }));
       }
