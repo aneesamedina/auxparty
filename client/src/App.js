@@ -97,7 +97,7 @@ function MainQueueApp({ role }) {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  const [skipVotesCount, setSkipVotesCount] = useState(0);
+  const [skipVotesCount, setSkipVotesCount] = useState({});
   const [playNextVotesCount, setPlayNextVotesCount] = useState({}); // { songUri: count }
 
   const normalizeNowPlaying = (np) => {
