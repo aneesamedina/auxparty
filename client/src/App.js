@@ -23,7 +23,7 @@ function LoginPage({ onSelectRole }) {
         alignItems: 'center',
         textAlign: 'center',
         padding: 40,
-        background: 'linear-gradient(135deg, #a55a88ff, #1dd1a1, #458ed3ff)',
+        background: 'linear-gradient(135deg, #ff7518, #4b0082, #000000)',
         backgroundSize: '400% 400%',
         animation: 'gradientAnimation 15s ease infinite',
         color: '#fff',
