@@ -360,10 +360,15 @@ async function playNextSong(manual = false) {
 
         // Move to next song only if current song has finished
         if (player.item.uri === currentSongId && player.progress_ms >= player.item.duration_ms - 1000) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-          currentSongId = null;
-          playNextSong();
+            if (player.item.uri === nowPlaying?.song) { // only proceed if still the same song
+                console.log('[poll] song finished, moving to next:', nowPlaying.trackName);
+                clearInterval(pollInterval);
+                pollInterval = null;
+                currentSongId = null;
+                playNextSong();
+            } else {
+                console.log('[poll] song already changed, ignoring finish trigger');
+            }
         }
       } catch (err) {
         console.error('Polling error:', err);
