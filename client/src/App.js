@@ -380,7 +380,7 @@ function MainQueueApp({ role }) {
           flex-direction: column;
         }
         .song-info .title { font-weight: bold; font-size: 16px; }
-        .song-info .artists, .song-info .added-by { font-size: 12px; color: #eee; }
+        .song-info .artists, .song-info .added-by { font-size: 12px; color: #fff; }
       `}</style>
 
       <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
@@ -480,7 +480,7 @@ function MainQueueApp({ role }) {
                     />
                     <div>
                       <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
-                      <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                      <div style={{ fontSize: 12, color: '#fff' }}>Added by {item.name}</div>
                     </div>
 
                     <div style={{ display: 'flex', gap: 8 }}>
