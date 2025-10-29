@@ -279,51 +279,56 @@ app.post('/queue/remove', (req, res) => {
   res.json({ queue });
 });
 
-let pollInterval = null; // global poll lock
-let currentSongId = null; // track the actual song being monitored
+let playLock = false; // strong lock to prevent concurrent playNextSong calls
+let pollInterval = null; // global poll interval
+let currentSongId = null; // track the currently playing song
 
 async function playNextSong(manual = false) {
-  if (skipLock) return;
-  skipLock = true;
-  setTimeout(() => (skipLock = false), 1000);
-
-  let next;
-
-  if (queue.length > 0) {
-    next = queue.shift();
-  } else {
-    next = await fetchAutoplaySong();
-    if (!next) {
-      isPlaying = false;
-      nowPlaying = null;
-      currentSongId = null;
-      io.emit('queueUpdate', { queue, nowPlaying });
-      return;
-    }
-  }
-
-  if (nowPlaying) history.push(nowPlaying); // save current song to history
-
-  nowPlaying = {
-    trackName: next.trackName,
-    song: next.song,
-    artists: next.artists,
-    addedBy: next.name,
-    album: next.album
-  };
-
-  currentSongId = next.song; // track the currently playing song
-
-  // reset votes
-  skipVotes = {};
-  playNextVotes = {};
-  io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
-  io.emit('voteUpdate', { type: 'playnext', song: nowPlaying.song, votes: 0 });
-
-  isPlaying = true;
-  io.emit('queueUpdate', { queue, nowPlaying });
+  if (playLock) return; // prevent double execution
+  playLock = true;
 
   try {
+    let next;
+
+    // Determine next song
+    if (queue.length > 0) {
+      next = queue.shift();
+    } else {
+      next = await fetchAutoplaySong();
+      if (!next) {
+        // nothing to play
+        isPlaying = false;
+        nowPlaying = null;
+        currentSongId = null;
+        io.emit('queueUpdate', { queue, nowPlaying });
+        return;
+      }
+    }
+
+    // Save current song to history
+    if (nowPlaying) history.push(nowPlaying);
+
+    // Update nowPlaying
+    nowPlaying = {
+      trackName: next.trackName,
+      song: next.song,
+      artists: next.artists,
+      addedBy: next.name,
+      album: next.album
+    };
+
+    currentSongId = next.song;
+
+    // Reset votes
+    skipVotes = {};
+    playNextVotes = {};
+    io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
+    io.emit('voteUpdate', { type: 'playnext', song: nowPlaying.song, votes: 0 });
+
+    isPlaying = true;
+    io.emit('queueUpdate', { queue, nowPlaying });
+
+    // Play song on Spotify
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -347,7 +352,7 @@ async function playNextSong(manual = false) {
           return;
         }
 
-        // Only auto-recover if same song and not manually paused
+        // Auto-recover if playback paused unexpectedly
         if (
           player.item.uri === currentSongId &&
           !player.is_playing &&
@@ -358,17 +363,18 @@ async function playNextSong(manual = false) {
           await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
         }
 
-        // Move to next song only if current song has finished
-        if (player.item.uri === currentSongId && player.progress_ms >= player.item.duration_ms - 1000) {
-            if (player.item.uri === nowPlaying?.song) { // only proceed if still the same song
-                console.log('[poll] song finished, moving to next:', nowPlaying.trackName);
-                clearInterval(pollInterval);
-                pollInterval = null;
-                currentSongId = null;
-                playNextSong();
-            } else {
-                console.log('[poll] song already changed, ignoring finish trigger');
-            }
+        // Move to next song if current song finished
+        if (
+          player.item.uri === currentSongId &&
+          player.progress_ms >= player.item.duration_ms - 1000
+        ) {
+          if (player.item.uri === nowPlaying?.song) {
+            console.log('[poll] song finished, moving to next:', nowPlaying.trackName);
+            clearInterval(pollInterval);
+            pollInterval = null;
+            currentSongId = null;
+            await playNextSong(); // will respect playLock
+          }
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -386,6 +392,8 @@ async function playNextSong(manual = false) {
     nowPlaying = null;
     currentSongId = null;
     io.emit('queueUpdate', { queue, nowPlaying });
+  } finally {
+    playLock = false; // release lock when done
   }
 }
 
