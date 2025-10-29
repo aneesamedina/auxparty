@@ -55,7 +55,7 @@ function LoginPage({ onSelectRole }) {
           transition: all 0.3s ease;
         }
         .host-button { background-color: #aaaaaaff; }
-        .guest-button { background-color: #303030ff; }
+        .guest-button { background-color: #646060ff; }
         .role-button:hover {
           box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
           transform: scale(1.05);
@@ -424,7 +424,7 @@ function MainQueueApp({ role }) {
           <img src={nowPlaying.album?.images[0]?.url || ''} alt={nowPlaying.trackName} style={{ width: 64, height: 64, marginRight: 10 }} />
           <div>
             <div>{nowPlaying.trackName}</div>
-            <div style={{ fontSize: 12, color: '#555' }}>
+            <div style={{ fontSize: 12, color: '#fff' }}>
               {nowPlaying.artists.join(', ')}
               {nowPlaying.addedBy && <p>Added by {nowPlaying.addedBy}</p>}
             </div>
@@ -460,7 +460,7 @@ function MainQueueApp({ role }) {
                         />
                         <div style={{ flex: 1 }}>
                           <div>{item.trackName || item.song} by {item.artists.join(', ')}</div>
-                          <div style={{ fontSize: 12, color: '#555' }}>Added by {item.name}</div>
+                          <div style={{ fontSize: 12, color: '#fff' }}>Added by {item.name}</div>
                         </div>
                         <button
                           className="queue-button host-button"

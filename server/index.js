@@ -279,6 +279,8 @@ app.post('/queue/remove', (req, res) => {
   res.json({ queue });
 });
 
+let pollInterval = null; // global poll lock
+
 async function playNextSong(manual = false) {
   if (skipLock) return;
   skipLock = true;
@@ -297,6 +299,7 @@ async function playNextSong(manual = false) {
       return;
     }
   }
+
   if (nowPlaying) history.push(nowPlaying); // save current song to history
 
   nowPlaying = {
@@ -306,6 +309,7 @@ async function playNextSong(manual = false) {
     addedBy: next.name,
     album: next.album
   };
+
   skipVotes = {};
   playNextVotes = {};
   io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
@@ -314,8 +318,6 @@ async function playNextSong(manual = false) {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-
-
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
@@ -323,33 +325,44 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    const poll = setInterval(async () => {
+    // Stop any existing poll
+    if (pollInterval) clearInterval(pollInterval);
+
+    // Start new poll
+    pollInterval = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
         if (!player || !player.item) {
-          clearInterval(poll);
+          clearInterval(pollInterval);
+          pollInterval = null;
           isPlaying = false;
           nowPlaying = null;
           io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
 
-        const progress = player.progress_ms;
-        const duration = player.item.duration_ms;
-
-        // 🟢 AUTO-RECOVERY: if Spotify paused unexpectedly, resume it
-        if (!player.is_playing && isPlaying && !manualPause) {
+        // Only auto-recover if same song and not manually paused
+        if (
+          player.item.uri === nowPlaying.song &&
+          !player.is_playing &&
+          isPlaying &&
+          !manualPause
+        ) {
           console.log('[autoRecover] Detected paused playback — attempting resume...');
           await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
         }
 
-        if (progress >= duration - 1000 && isPlaying) {
-          clearInterval(poll);
+        // Move to next song only if current song has finished
+        if (player.item.uri === nowPlaying.song && player.progress_ms >= player.item.duration_ms) {
+          clearInterval(pollInterval);
+          pollInterval = null;
           playNextSong();
         }
+
       } catch (err) {
         console.error('Polling error:', err);
-        clearInterval(poll);
+        clearInterval(pollInterval);
+        pollInterval = null;
         isPlaying = false;
         nowPlaying = null;
         io.emit('queueUpdate', { queue, nowPlaying });
