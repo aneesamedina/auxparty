@@ -338,7 +338,7 @@ async function playNextSong(manual = false) {
         const duration = player.item.duration_ms;
 
         // 🟢 AUTO-RECOVERY: if Spotify paused unexpectedly, resume it
-        if (!player.is_playing && isPlaying && !manualPause) {
+        if (!player.is_playing && isPlaying && !manualPause && progress < duration - 1000) {
           console.log('[autoRecover] Detected paused playback — attempting resume...');
           await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
         }
