@@ -323,6 +323,7 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
+    let autoRecoverTimeout = null;
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -336,14 +337,28 @@ async function playNextSong(manual = false) {
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
+        const trackName = player.item.name;
 
-        // 🟢 AUTO-RECOVERY: if Spotify paused unexpectedly, resume it
+        // ✅ Improved auto-recovery with delay
         if (!player.is_playing && isPlaying && !manualPause && progress < duration - 1000) {
-          console.log('[autoRecover] Detected paused playback — attempting resume...');
-          await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+          if (!autoRecoverTimeout) {
+            console.log(`[autoRecover] Pause detected on "${trackName}" — verifying in 3s...`);
+            autoRecoverTimeout = setTimeout(async () => {
+              const verifyPlayer = await spotifyFetch('https://api.spotify.com/v1/me/player');
+              if (!verifyPlayer?.is_playing && !manualPause && verifyPlayer.progress_ms < duration - 1000) {
+                console.log(`[autoRecover] Still paused — resuming "${trackName}"...`);
+                await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+              } else {
+                console.log('[autoRecover] False alarm — playback continued naturally.');
+              }
+              autoRecoverTimeout = null;
+            }, 3000); // wait 3 seconds before attempting resume
+          }
         }
 
+        // ⏭ If track ended naturally
         if (progress >= duration - 1000 && isPlaying) {
+          console.log(`[pollPlayback] Track "${trackName}" ended — moving to next song.`);
           clearInterval(poll);
           playNextSong();
         }
