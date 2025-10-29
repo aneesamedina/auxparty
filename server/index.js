@@ -279,121 +279,88 @@ app.post('/queue/remove', (req, res) => {
   res.json({ queue });
 });
 
-let playLock = false; // strong lock to prevent concurrent playNextSong calls
-let pollInterval = null; // global poll interval
-let currentSongId = null; // track the currently playing song
-
 async function playNextSong(manual = false) {
-  if (playLock) return; // prevent double execution
-  playLock = true;
+  if (skipLock) return;
+  skipLock = true;
+  setTimeout(() => skipLock = false, 1000);
+
+  let next;
+
+  if (queue.length > 0) {
+    next = queue.shift();
+  } else {
+    next = await fetchAutoplaySong();
+    if (!next) {
+      isPlaying = false;
+      nowPlaying = null;
+      io.emit('queueUpdate', { queue, nowPlaying });
+      return;
+    }
+  }
+  if (nowPlaying) history.push(nowPlaying); // save current song to history
+
+  nowPlaying = {
+    trackName: next.trackName,
+    song: next.song,
+    artists: next.artists,
+    addedBy: next.name,
+    album: next.album
+  };
+  skipVotes = {};
+  playNextVotes = {};
+  io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
+  io.emit('voteUpdate', { type: 'playnext', song: nowPlaying.song, votes: 0 });
+
+  isPlaying = true;
+  io.emit('queueUpdate', { queue, nowPlaying });
+
+
 
   try {
-    let next;
-
-    // Determine next song
-    if (queue.length > 0) {
-      next = queue.shift();
-    } else {
-      next = await fetchAutoplaySong();
-      if (!next) {
-        // nothing to play
-        isPlaying = false;
-        nowPlaying = null;
-        currentSongId = null;
-        io.emit('queueUpdate', { queue, nowPlaying });
-        return;
-      }
-    }
-
-    // Save current song to history
-    if (nowPlaying) history.push(nowPlaying);
-
-    // Update nowPlaying
-    nowPlaying = {
-      trackName: next.trackName,
-      song: next.song,
-      artists: next.artists,
-      addedBy: next.name,
-      album: next.album
-    };
-
-    currentSongId = next.song;
-
-    // Reset votes
-    skipVotes = {};
-    playNextVotes = {};
-    io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
-    io.emit('voteUpdate', { type: 'playnext', song: nowPlaying.song, votes: 0 });
-
-    isPlaying = true;
-    io.emit('queueUpdate', { queue, nowPlaying });
-
-    // Play song on Spotify
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    // Stop any existing poll
-    if (pollInterval) clearInterval(pollInterval);
-
-    // Start new poll
-    pollInterval = setInterval(async () => {
+    const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
         if (!player || !player.item) {
-          clearInterval(pollInterval);
-          pollInterval = null;
+          clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
-          currentSongId = null;
           io.emit('queueUpdate', { queue, nowPlaying });
           return;
         }
 
-        // Auto-recover if playback paused unexpectedly
-        if (
-          player.item.uri === currentSongId &&
-          !player.is_playing &&
-          isPlaying &&
-          !manualPause
-        ) {
+        const progress = player.progress_ms;
+        const duration = player.item.duration_ms;
+
+        // 🟢 AUTO-RECOVERY: if Spotify paused unexpectedly, resume it
+        if (!player.is_playing && isPlaying && !manualPause) {
           console.log('[autoRecover] Detected paused playback — attempting resume...');
           await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
         }
 
-        // Move to next song if current song finished
-        if (
-          player.item.uri === currentSongId &&
-          player.progress_ms >= player.item.duration_ms - 1000
-        ) {
-          if (player.item.uri === nowPlaying?.song) {
-            console.log('[poll] song finished, moving to next:', nowPlaying.trackName);
-            clearInterval(pollInterval);
-            pollInterval = null;
-            currentSongId = null;
-            await playNextSong(); // will respect playLock
-          }
+        if (progress >= duration - 1000 && isPlaying) {
+          clearInterval(poll);
+          playNextSong();
         }
       } catch (err) {
         console.error('Polling error:', err);
-        clearInterval(pollInterval);
-        pollInterval = null;
+        clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
-        currentSongId = null;
         io.emit('queueUpdate', { queue, nowPlaying });
       }
     }, 2000);
+
   } catch (err) {
     console.error('Failed to play song:', err);
     isPlaying = false;
     nowPlaying = null;
-    currentSongId = null;
     io.emit('queueUpdate', { queue, nowPlaying });
-  } finally {
-    playLock = false; // release lock when done
   }
 }
 
