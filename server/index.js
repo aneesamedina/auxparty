@@ -323,7 +323,6 @@ async function playNextSong(manual = false) {
       body: JSON.stringify({ uris: [next.song] }),
     });
 
-    let autoRecoverTimeout = null;
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -337,30 +336,33 @@ async function playNextSong(manual = false) {
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
-        const trackName = player.item.name;
 
-        // ✅ Improved auto-recovery with delay
-        if (!player.is_playing && isPlaying && !manualPause && progress < duration - 1000) {
-          if (!autoRecoverTimeout) {
-            console.log(`[autoRecover] Pause detected on "${trackName}" — verifying in 3s...`);
-            autoRecoverTimeout = setTimeout(async () => {
-              const verifyPlayer = await spotifyFetch('https://api.spotify.com/v1/me/player');
-              if (!verifyPlayer?.is_playing && !manualPause && verifyPlayer.progress_ms < duration - 1000) {
-                console.log(`[autoRecover] Still paused — resuming "${trackName}"...`);
-                await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
-              } else {
-                console.log('[autoRecover] False alarm — playback continued naturally.');
-              }
-              autoRecoverTimeout = null;
-            }, 3000); // wait 3 seconds before attempting resume
-          }
+        // ✅ prevent double triggers (guard)
+        if (!global.pollLock) global.pollLock = false;
+        if (progress >= duration - 1000 && isPlaying && !global.pollLock) {
+          global.pollLock = true;
+          clearInterval(poll);
+          console.log(`[pollPlayback] Track "${player.item.name}" ended — moving to next song.`);
+          await playNextSong();
+          setTimeout(() => (global.pollLock = false), 2000);
+          return;
         }
 
-        // ⏭ If track ended naturally
-        if (progress >= duration - 1000 && isPlaying) {
-          console.log(`[pollPlayback] Track "${trackName}" ended — moving to next song.`);
-          clearInterval(poll);
-          playNextSong();
+        // ✅ smarter auto-recover: ignore pauses very close to end of track
+        if (
+          !player.is_playing &&
+          isPlaying &&
+          !manualPause &&
+          progress < duration - 2000
+        ) {
+          console.log(`[autoRecover] Pause detected on "${player.item.name}" — verifying in 3s...`);
+          setTimeout(async () => {
+            const verify = await spotifyFetch('https://api.spotify.com/v1/me/player');
+            if (verify && !verify.is_playing && verify.progress_ms < verify.item.duration_ms - 2000) {
+              console.log(`[autoRecover] Still paused — resuming "${verify.item.name}"...`);
+              await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
+            }
+          }, 3000);
         }
       } catch (err) {
         console.error('Polling error:', err);
