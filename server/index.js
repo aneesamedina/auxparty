@@ -282,9 +282,6 @@ app.post('/queue/remove', (req, res) => {
   res.json({ queue });
 });
 
-let pollInterval = null; // 🟢 Tracks the active poll interval to prevent duplicates
-let globalPollLock = false; // optional, replaces global.pollLock usage
-
 // Skip/Next
 app.post('/play', async (req, res) => {
   try {
