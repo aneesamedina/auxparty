@@ -325,16 +325,18 @@ function startPolling() {
       }
 
       // AutoRecover if paused
-      if (!player.is_playing && isPlaying && !manualPause && progress < duration - 2000 && !isRecovering) {
+      if (!player.is_playing && isPlaying && !manualPause && progress < duration - 5000 && !isRecovering) {
         isRecovering = true;
+        stopPolling(); // temporarily stop polling
         console.log(`[autoRecover] Pause detected on "${player.item.name}" — verifying in 3s...`);
         setTimeout(async () => {
           const verify = await spotifyFetch('https://api.spotify.com/v1/me/player');
-          if (verify && !verify.is_playing && verify.progress_ms < verify.item.duration_ms - 2000) {
+          if (verify && !verify.is_playing && verify.progress_ms < verify.item.duration_ms - 5000) {
             console.log(`[autoRecover] Still paused — resuming "${verify.item.name}"...`);
             await playSong(verify.item.uri);
           }
           isRecovering = false;
+          startPolling(); // restart polling after recovery
         }, 3000);
       }
     } catch (err) {
