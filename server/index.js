@@ -355,14 +355,14 @@ async function playNextSong(manual = false) {
         const duration = player.item.duration_ms;
 
         // ✅ Prevent double triggers
-        if (!global.pollLock) global.pollLock = false;
-        if (progress >= duration - 1000 && isPlaying && !global.pollLock) {
-          global.pollLock = true;
+        if (!globalPollLock) globalPollLock = false;
+        if (progress >= duration - 1000 && isPlaying && !globalPollLock) {
+          globalPollLock = true;
           clearInterval(pollInterval);
           pollInterval = null;
           console.log(`[pollPlayback] Track "${player.item.name}" ended — moving to next song.`);
           await playNextSong();
-          setTimeout(() => (global.pollLock = false), 2000);
+          setTimeout(() => (globalPollLock = false), 2000);
           return;
         }
 
