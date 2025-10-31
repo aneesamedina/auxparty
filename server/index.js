@@ -335,7 +335,7 @@ async function playNextSong(manual = false) {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
         if (!player || !player.item) {
-          console.warn('[Poll] Player missing — possibly paused or lost device');
+          console.warn('[Poll] Player missing — possibly lost device');
           clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
@@ -345,14 +345,38 @@ async function playNextSong(manual = false) {
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
+        const deviceName = player.device?.name || 'Unknown';
+        const deviceType = player.device?.type || 'Unknown';
+        const deviceActive = player.device?.is_active;
 
-        console.log(`[Poll] Progress: ${player.progress_ms}/${player.item.duration_ms} (${player.is_playing ? 'playing' : 'paused'})`);
+        console.log(`[Poll] Progress: ${progress}/${duration} (${player.is_playing ? 'playing' : 'paused'}) | Device: ${deviceName} | Type: ${deviceType} | Active: ${deviceActive}`);
 
+        // If song ended, go next
         if (progress >= duration - 1000 && isPlaying) {
           console.log('[Poll] Song ended → next');
           clearInterval(poll);
           playNextSong();
+          return;
         }
+
+        // Recovery: if progress reset to 0 and paused, try resuming
+        if (progress === 0 && !player.is_playing && nowPlaying) {
+          console.warn('[Poll] Playback reset — resending play for nowPlaying');
+          await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+            method: 'PUT',
+            body: JSON.stringify({ uris: [nowPlaying.song] })
+          });
+        }
+
+        // Optional: detect if another device took over
+        if (!deviceActive && nowPlaying) {
+          console.warn('[Poll] Another device is active — trying to resume playback on this device');
+          await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+            method: 'PUT',
+            body: JSON.stringify({ uris: [nowPlaying.song] })
+          });
+        }
+
       } catch (err) {
         console.error('[Poll Error]', err);
         clearInterval(poll);
