@@ -100,6 +100,8 @@ function MainQueueApp({ role }) {
   const [skipVotesCount, setSkipVotesCount] = useState({});
   const [playNextVotesCount, setPlayNextVotesCount] = useState({}); // { songUri: count }
 
+  const [trackIndex, setTrackIndex] = useState('');
+
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
     return {
@@ -147,6 +149,26 @@ function MainQueueApp({ role }) {
       setIsPaused(false);
     } catch (err) {
       console.error('Error playing next:', err);
+    }
+  };
+
+  const playFromIndex = async () => {
+    const index = parseInt(trackIndex);
+    if (isNaN(index) || index < 1) return alert('Enter a valid track number');
+
+    try {
+      const res = await fetch(`${API_URL}/host/play-from-index`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ index: index - 1 }) // convert to 0-based
+      });
+
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      setTrackIndex('');
+    } catch (err) {
+      console.error('Error playing from track index:', err);
+      alert('Failed to start playback from that track');
     }
   };
 
@@ -404,6 +426,25 @@ function MainQueueApp({ role }) {
         <input className="song-input" placeholder="Search Spotify" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
+
+      <div style={{ marginBottom: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
+        <input
+          type="number"
+          placeholder="Track #"
+          min="1"
+          value={trackIndex}
+          onChange={(e) => setTrackIndex(e.target.value)}
+          className="song-input"
+          style={{ width: 100 }}
+        />
+        <button
+          className="queue-button host-button"
+          onClick={playFromIndex}
+        >
+          ▶ Play from Track
+        </button>
+      </div>
+
 
       <ul>
         {results.map((track, idx) => (

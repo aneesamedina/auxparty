@@ -455,6 +455,41 @@ app.post('/host/pause', async (req, res) => {
   }
 });
 
+app.post('/host/play-from-index', async (req, res) => {
+  const { index } = req.body;
+  const sessionId = req.session?.id; // or however you track the host session
+  const session = sessions[sessionId];
+  if (!session) return res.status(404).send('Session not found');
+
+  const accessToken = session.access_token;
+  const playlistId = session.currentPlaylistId;
+
+  try {
+    // Fetch playlist tracks
+    const playlistRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = await playlistRes.json();
+    const uris = data.items.map(item => item.track.uri);
+
+    // Play from chosen index
+    await fetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uris,
+        offset: { position: index },
+        position_ms: 0,
+      }),
+    });
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Failed to start playback');
+  }
+});
+
 // Resume Spotify (generic)
 app.post('/resume', async (req, res) => {
   try {
