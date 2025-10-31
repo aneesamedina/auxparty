@@ -97,8 +97,8 @@ function MainQueueApp({ role, sessionId }) {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  const [skipVotesCount, setSkipVotesCount] = useState(2);
-  const [playNextVotesCount, setPlayNextVotesCount] = useState(2);
+  const [skipMinVotes, setSkipMinVotes] = useState(2);
+  const [playNextMinVotes, setPlayNextMinVotes] = useState(2);
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
