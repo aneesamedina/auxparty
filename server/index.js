@@ -286,6 +286,7 @@ app.post('/queue/remove', (req, res) => {
 });
 
 async function playNextSong(manual = false) {
+  console.log(`[playNextSong] Called at ${new Date().toISOString()} | isPlaying=${isPlaying}`);
   if (skipLock) return;
   skipLock = true;
   setTimeout(() => skipLock = false, 1000);
@@ -328,7 +329,8 @@ async function playNextSong(manual = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
-
+    console.log(`[playNextSong] Spotify play request sent for ${next.trackName}`);
+    
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -343,6 +345,8 @@ async function playNextSong(manual = false) {
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
+
+        console.log(`[Poll] Progress: ${player.progress_ms}/${player.item.duration_ms} (${player.is_playing ? 'playing' : 'paused'})`);
 
         if (progress >= duration - 1000 && isPlaying) {
           console.log('[Poll] Song ended → next');
