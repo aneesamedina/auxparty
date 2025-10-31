@@ -332,7 +332,7 @@ async function playNextSong(manual = false) {
     });
 
     let lastRecovery = 0; // cooldown for unexpected pause recovery
-    const SONG_END_BUFFER = 3000; // 3 seconds buffer before end
+    const SONG_END_BUFFER = 000; // 3 seconds buffer before end
 
     const poll = setInterval(async () => {
       try {
