@@ -427,24 +427,25 @@ function MainQueueApp({ role, sessionId }) {
         <button className="queue-button host-button" onClick={searchSong}>🔍 Search</button>
       </div>
 
-      <div style={{ marginBottom: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
-        <input
-          type="number"
-          placeholder="Track #"
-          min="1"
-          value={trackIndex}
-          onChange={(e) => setTrackIndex(e.target.value)}
-          className="song-input"
-          style={{ width: 100 }}
-        />
-        <button
-          className="queue-button host-button"
-          onClick={playFromIndex}
-        >
-          ▶ Play from Track
-        </button>
-      </div>
-
+      {role === 'host' && (
+        <div style={{ marginBottom: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
+          <input
+            type="number"
+            placeholder="Track #"
+            min="1"
+            value={trackIndex}
+            onChange={(e) => setTrackIndex(e.target.value)}
+            className="song-input"
+            style={{ width: 100 }}
+          />
+          <button
+            className="queue-button host-button"
+            onClick={playFromIndex}
+          >
+            ▶ Play from Track
+          </button>
+        </div>
+      )}
 
       <ul>
         {results.map((track, idx) => (
