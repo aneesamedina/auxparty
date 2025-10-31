@@ -27,7 +27,6 @@ let refreshToken = null;
 let queue = [];
 let nowPlaying = null;
 let isPlaying = false;
-let manualPause = false;
 
 // skip lock
 let skipLock = false;
@@ -108,20 +107,27 @@ async function spotifyFetch(url, options = {}, retry = true) {
     ...options,
     headers: { ...options.headers, Authorization: `Bearer ${accessToken}` },
   });
+
+  console.log(`[SpotifyFetch] ${options.method || 'GET'} ${url} → ${res.status}`);
+
   if (res.status === 401 && retry) {
+    console.warn('[SpotifyFetch] Token expired, refreshing...');
     await refreshAccessToken();
     return spotifyFetch(url, options, false);
   }
-  if (res.status === 204) return null; // No Content, e.g., pause success with empty body
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const json = await res.json();
-      return json;
-    } else {
-      const text = await res.text();
-      // Return text or throw error if you want
-      return text;
-    }
+
+  if (res.status === 204) return null;
+
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const json = await res.json();
+    if (res.status >= 400) console.error('[SpotifyFetch Error]', json);
+    return json;
+  } else {
+    const text = await res.text();
+    if (res.status >= 400) console.error('[SpotifyFetch Error]', text);
+    return text;
+  }
 }
 
 app.post('/login', (req, res) => {
@@ -327,6 +333,7 @@ async function playNextSong(manual = false) {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
         if (!player || !player.item) {
+          console.warn('[Poll] Player missing — possibly paused or lost device');
           clearInterval(poll);
           isPlaying = false;
           nowPlaying = null;
@@ -337,18 +344,13 @@ async function playNextSong(manual = false) {
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
 
-        // 🟢 AUTO-RECOVERY: if Spotify paused unexpectedly, resume it
-        if (!player.is_playing && isPlaying && !manualPause) {
-          console.log('[autoRecover] Detected paused playback — attempting resume...');
-          await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
-        }
-
         if (progress >= duration - 1000 && isPlaying) {
+          console.log('[Poll] Song ended → next');
           clearInterval(poll);
           playNextSong();
         }
       } catch (err) {
-        console.error('Polling error:', err);
+        console.error('[Poll Error]', err);
         clearInterval(poll);
         isPlaying = false;
         nowPlaying = null;
@@ -405,14 +407,14 @@ app.post('/host/previous', async (req, res) => {
 app.post('/host/pause', async (req, res) => {
   try {
     const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
-    if (!player) return res.status(400).json({ error: 'No active playback found.' });
+    if (!player) {
+      return res.status(400).json({ error: 'No active playback found.' });
+    }
 
     if (player.is_playing) {
       await spotifyFetch('https://api.spotify.com/v1/me/player/pause', { method: 'PUT' });
-      manualPause = true; // user manually paused
     } else {
       await spotifyFetch('https://api.spotify.com/v1/me/player/play', { method: 'PUT' });
-      manualPause = false; // user manually resumed
     }
 
     const updatedPlayer = await spotifyFetch('https://api.spotify.com/v1/me/player');
