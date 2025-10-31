@@ -87,7 +87,7 @@ function HostPage() {
 // -------------------
 // Main Queue App Component
 // -------------------
-function MainQueueApp({ role }) {
+function MainQueueApp({ role, sessionId }) {
   const [queue, setQueue] = useState([]);
   const [name, setName] = useState(() => localStorage.getItem('guestName') || '');
   const [draftName, setDraftName] = useState('');
@@ -97,8 +97,8 @@ function MainQueueApp({ role }) {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
 
-  const [skipVotesCount, setSkipVotesCount] = useState({});
-  const [playNextVotesCount, setPlayNextVotesCount] = useState({});
+  const [skipVotesCount, setSkipVotesCount] = useState(2);
+  const [playNextVotesCount, setPlayNextVotesCount] = useState(2);
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
