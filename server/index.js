@@ -287,6 +287,7 @@ app.post('/queue/remove', (req, res) => {
 
 async function playNextSong(manual = false) {
   console.log(`[playNextSong] Called at ${new Date().toISOString()} | isPlaying=${isPlaying}`);
+
   if (skipLock) return;
   skipLock = true;
   setTimeout(() => skipLock = false, 1000);
@@ -304,6 +305,7 @@ async function playNextSong(manual = false) {
       return;
     }
   }
+
   if (nowPlaying) history.push(nowPlaying); // save current song to history
 
   nowPlaying = {
@@ -313,6 +315,7 @@ async function playNextSong(manual = false) {
     addedBy: next.name,
     album: next.album
   };
+
   skipVotes = {};
   playNextVotes = {};
   io.emit('voteUpdate', { type: 'skip', song: nowPlaying.song, votes: 0 });
@@ -321,16 +324,16 @@ async function playNextSong(manual = false) {
   isPlaying = true;
   io.emit('queueUpdate', { queue, nowPlaying });
 
-
-
   try {
     await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [next.song] }),
     });
-    console.log(`[playNextSong] Spotify play request sent for ${next.trackName}`);
-    
+
+    let lastRecovery = 0; // cooldown for unexpected pause recovery
+    const SONG_END_BUFFER = 3000; // 3 seconds buffer before end
+
     const poll = setInterval(async () => {
       try {
         const player = await spotifyFetch('https://api.spotify.com/v1/me/player');
@@ -345,36 +348,32 @@ async function playNextSong(manual = false) {
 
         const progress = player.progress_ms;
         const duration = player.item.duration_ms;
-        const deviceName = player.device?.name || 'Unknown';
-        const deviceType = player.device?.type || 'Unknown';
-        const deviceActive = player.device?.is_active;
 
-        console.log(`[Poll] Progress: ${progress}/${duration} (${player.is_playing ? 'playing' : 'paused'}) | Device: ${deviceName} | Type: ${deviceType} | Active: ${deviceActive}`);
+        console.log(`[Poll] Progress: ${progress}/${duration} (${player.is_playing ? 'playing' : 'paused'})`);
 
-        // If song ended, go next
-        if (progress >= duration - 1000 && isPlaying) {
+        // Song ended naturally → next
+        if (progress >= duration - SONG_END_BUFFER && isPlaying) {
           console.log('[Poll] Song ended → next');
           clearInterval(poll);
           playNextSong();
           return;
         }
 
-        // Recovery: if progress reset to 0 and paused, try resuming
+        // Detect unexpected pause/reset
         if (progress === 0 && !player.is_playing && nowPlaying) {
-          console.warn('[Poll] Playback reset — resending play for nowPlaying');
-          await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-            method: 'PUT',
-            body: JSON.stringify({ uris: [nowPlaying.song] })
-          });
-        }
-
-        // Optional: detect if another device took over
-        if (!deviceActive && nowPlaying) {
-          console.warn('[Poll] Another device is active — trying to resume playback on this device');
-          await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
-            method: 'PUT',
-            body: JSON.stringify({ uris: [nowPlaying.song] })
-          });
+          // Only recover if song hasn’t almost finished
+          if (player.item && (player.progress_ms < player.item.duration_ms - SONG_END_BUFFER)) {
+            const now = Date.now();
+            if (now - lastRecovery > 5000) { // 5s cooldown
+              console.warn('[Poll] Playback reset — resending play for nowPlaying');
+              lastRecovery = now;
+              await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uris: [nowPlaying.song] })
+              });
+            }
+          }
         }
 
       } catch (err) {
