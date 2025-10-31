@@ -98,7 +98,7 @@ function MainQueueApp({ role }) {
   const [isPaused, setIsPaused] = useState(false);
 
   const [skipVotesCount, setSkipVotesCount] = useState({});
-  const [playNextVotesCount, setPlayNextVotesCount] = useState({}); // { songUri: count }
+  const [playNextVotesCount, setPlayNextVotesCount] = useState({});
 
   const normalizeNowPlaying = (np) => {
     if (!np) return null;
@@ -167,6 +167,12 @@ function MainQueueApp({ role }) {
         setPlayNextVotesCount(prev => ({ ...prev, [song]: votes }));
       }
     });
+
+    socket.on('thresholdsUpdate', ({ skipMinVotes, playNextMinVotes }) => {
+      setSkipMinVotes(skipMinVotes);
+      setPlayNextMinVotes(playNextMinVotes);
+    });
+
     return () => socket.disconnect();
   }, []);
 
@@ -386,13 +392,63 @@ function MainQueueApp({ role }) {
       <h1>Aux Party - {role === 'guest' ? 'Guest' : 'Host'}</h1>
 
       {role === 'host' && (
-        <div style={{ marginBottom: 20, display: 'flex', gap: 10 }}>
-          <button className="queue-button host-button" onClick={playPrevious}>Previous</button>
-          <button className="queue-button host-button" onClick={togglePause}>
-            {isPaused ? '▶ Resume' : '⏸ Pause'}
-          </button>
-          <button className="queue-button host-button" onClick={playNext}>Next</button>
-        </div>
+        <>
+          <div style={{ marginBottom: 20, display: 'flex', gap: 10 }}>
+            <button className="queue-button host-button" onClick={playPrevious}>Previous</button>
+            <button className="queue-button host-button" onClick={togglePause}>
+              {isPaused ? '▶ Resume' : '⏸ Pause'}
+            </button>
+            <button className="queue-button host-button" onClick={playNext}>Next</button>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <h3>Vote Thresholds</h3>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label>
+                Skip Votes Needed:
+                <input
+                  type="number"
+                  value={skipMinVotes}
+                  min={1}
+                  onChange={(e) => setSkipMinVotes(Number(e.target.value))}
+                  style={{ width: 60, marginLeft: 4 }}
+                />
+              </label>
+              <label>
+                Play Next Votes Needed:
+                <input
+                  type="number"
+                  value={playNextMinVotes}
+                  min={1}
+                  onChange={(e) => setPlayNextMinVotes(Number(e.target.value))}
+                  style={{ width: 60, marginLeft: 4 }}
+                />
+              </label>
+              <button
+                className="queue-button host-button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`${API_URL}/host/set-votes`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ sessionId, skipThreshold: skipMinVotes, playNextThreshold: playNextMinVotes }),
+                      credentials: 'include',
+                    });
+                    const data = await res.json();
+                    console.log('Thresholds updated', data);
+                  } catch (err) {
+                    console.error('Failed to update thresholds', err);
+                  }
+                }}
+              >
+                Update Thresholds
+              </button>
+            </div>
+            <p style={{ fontSize: 12, marginTop: 4 }}>
+              Current: Skip = {skipMinVotes}, Play Next = {playNextMinVotes}
+            </p>
+          </div>
+        </>
       )}
 
       <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
