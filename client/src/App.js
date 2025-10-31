@@ -161,10 +161,10 @@ function MainQueueApp({ role, sessionId }) {
     });
     socket.on('voteUpdate', ({ type, song, votes }) => {
       if (type === 'skip' && song) {
-        setSkipVotesCount(prev => ({ ...prev, [song]: votes }));
+        setSkipMinVotes(prev => ({ ...prev, [song]: votes }));
       }
       if (type === 'playnext' && song) {
-        setPlayNextVotesCount(prev => ({ ...prev, [song]: votes }));
+        setPlayNextMinVotes(prev => ({ ...prev, [song]: votes }));
       }
     });
 
@@ -303,7 +303,7 @@ function MainQueueApp({ role, sessionId }) {
       });
       const data = await res.json();
       if (!res.ok) return alert(data.error);
-      setSkipVotesCount(prev => ({ ...prev, [songUri]: data.votes }));
+      setSkipMinVotes(prev => ({ ...prev, [songUri]: data.votes }));
     } catch (err) {
       console.error('Vote skip error:', err);
     }
@@ -321,7 +321,7 @@ function MainQueueApp({ role, sessionId }) {
       const data = await res.json();
       if (!res.ok) return alert(data.error);
 
-      setPlayNextVotesCount(prev => ({ ...prev, [songUri]: data.votes }));
+      setPlayNextMinVotes(prev => ({ ...prev, [songUri]: data.votes }));
     } catch (err) {
       console.error('Vote play-next error:', err);
     }
@@ -541,10 +541,10 @@ function MainQueueApp({ role, sessionId }) {
 
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="queue-button guest-button" onClick={() => voteSkip(item.song)}>
-                        ⏭ Vote Skip ({skipVotesCount[item.song] || 0})
+                        ⏭ Vote Skip ({skipMinVotes[item.song] || 0})
                       </button>
                       <button className="queue-button guest-button" onClick={() => votePlayNext(item.song)}>
-                        🔝 Vote Play Next ({playNextVotesCount[item.song] || 0})
+                        🔝 Vote Play Next ({playNextMinVotes[item.song] || 0})
                       </button>
                     </div>
                   </li>
