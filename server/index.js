@@ -463,7 +463,7 @@ app.post('/host/play-from-index', async (req, res) => {
     if (typeof index !== 'number' || index < 0) {
       return res.status(400).json({ error: 'Invalid track index' });
     }
-    lastPlaylistIndex = index; // save starting index
+    lastPlaylistIndex = index + 1; // save starting index
     // Fetch playlist tracks
     const playlistData = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=100`);
     if (!playlistData.items || !playlistData.items.length) {
