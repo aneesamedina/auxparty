@@ -35,8 +35,8 @@ let skipLock = false;
 let skipVotes = {}; // { songUri: Set(userIds) }
 let playNextVotes = {}; // { songUri: Set(userIds) }
 
-let skipMinVotes = 2;
-let playNextMinVotes = 2;
+const SKIP_MIN_VOTES = 2;      // change this to your desired number
+const PLAYNEXT_MIN_VOTES = 2;  // for play-next voting
 
 // Spotify Auth
 app.get('/login', (req, res) => {
@@ -207,7 +207,7 @@ app.post('/vote/skip', (req, res) => {
 
   io.emit('voteUpdate', { type: 'skip', song, votes });
 
-  if (votes >= skipMinVotes) {
+  if (votes >= SKIP_MIN_VOTES) {
     // Remove song from queue
     queue = queue.filter(item => item.song !== song);
 
@@ -239,7 +239,7 @@ app.post('/vote/playnext', (req, res) => {
 
   io.emit('voteUpdate', { type: 'playnext', song, votes });
 
-  if (votes >= playNextMinVotes) {
+  if (votes >= PLAYNEXT_MIN_VOTES) {
     const targetIndex = queue.findIndex(q => q.song === song);
     if (targetIndex !== -1) {
       const [target] = queue.splice(targetIndex, 1);
@@ -430,22 +430,6 @@ app.post('/host/previous', async (req, res) => {
   }
 });
 
-app.post('/host/set‑votes', (req, res) => {
-  const { sessionId, skipThreshold, playNextThreshold } = req.body;
-  const session = sessions[sessionId];
-  if (!session || session.role !== 'host') {
-    return res.status(403).json({ error: 'Not authorized' });
-  }
-  if (typeof skipThreshold === 'number' && skipThreshold > 0) {
-    skipMinVotes = skipThreshold;
-  }
-  if (typeof playNextThreshold === 'number' && playNextThreshold > 0) {
-    playNextMinVotes = playNextThreshold;
-  }
-  io.emit('thresholdsUpdate', { skipMinVotes, playNextMinVotes });
-  return res.json({ skipMinVotes, playNextMinVotes });
-});
-
 // Pause Spotify (generic)
 app.post('/host/pause', async (req, res) => {
   try {
@@ -503,10 +487,6 @@ app.get('/search', async (req, res) => {
     console.error('Search failed:', err);
     res.status(500).json({ error: 'Failed to search Spotify' });
   }
-});
-
-app.get('/votes/settings', (req, res) => {
-  res.json({ skipMinVotes, playNextMinVotes });
 });
 
 async function fetchAutoplaySong() {
