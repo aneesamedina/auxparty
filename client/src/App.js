@@ -87,7 +87,7 @@ function HostPage() {
 // -------------------
 // Main Queue App Component
 // -------------------
-function MainQueueApp({ role }) {
+function MainQueueApp({ role, sessionId }) {
   const [queue, setQueue] = useState([]);
   const [name, setName] = useState(() => localStorage.getItem('guestName') || '');
   const [draftName, setDraftName] = useState('');
