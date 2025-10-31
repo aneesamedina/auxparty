@@ -13,7 +13,8 @@ const client_id = process.env.SPOTIFY_CLIENT_ID;
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
 
 const playlist_id = '2Ly1ZZ9s22gQEd2XKLfHyR';
-let autoplayIndex = 0;
+//let autoplayIndex = 0;
+let lastPlaylistIndex = 0; // tracks the last played index in the pla
 
 app.use(cors({
   origin: 'https://auxparty-pied.vercel.app',
@@ -462,7 +463,7 @@ app.post('/host/play-from-index', async (req, res) => {
     if (typeof index !== 'number' || index < 0) {
       return res.status(400).json({ error: 'Invalid track index' });
     }
-
+    lastPlaylistIndex = index; // save starting index
     // Fetch playlist tracks
     const playlistData = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=100`);
     if (!playlistData.items || !playlistData.items.length) {
@@ -545,8 +546,8 @@ async function fetchAutoplaySong() {
     const data = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=50`);
     if (!data.items || data.items.length === 0) return null;
 
-    const track = data.items[autoplayIndex % data.items.length].track;
-    autoplayIndex++;
+    const track = data.items[lastPlaylistIndex % data.items.length].track;
+    lastPlaylistIndex++; // increment for next time
 
     return {
       name: 'Autoplay',
