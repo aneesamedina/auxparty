@@ -458,43 +458,51 @@ app.post('/host/pause', async (req, res) => {
 app.post('/host/play-from-index', async (req, res) => {
   try {
     const { index } = req.body;
-    if (index === undefined || index < 0) {
-      return res.status(400).json({ error: 'Invalid index' });
+
+    if (typeof index !== 'number' || index < 0) {
+      return res.status(400).json({ error: 'Invalid track index' });
     }
 
-    // Assume you have a queue stored in memory (like sessions[sessionId].queue)
-    const sessionId = req.cookies.sessionId;
-    const session = sessions[sessionId];
-    if (!session || !session.queue || !session.queue[index]) {
-      return res.status(400).json({ error: 'Track not found in queue' });
+    // Fetch playlist tracks
+    const playlistData = await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist_id}/tracks?limit=100`);
+    if (!playlistData.items || !playlistData.items.length) {
+      return res.status(400).json({ error: 'Playlist is empty or unavailable' });
     }
 
-    const trackUri = session.queue[index].song;
+    if (index >= playlistData.items.length) {
+      return res.status(400).json({ error: 'Index out of range' });
+    }
 
-    // Call Spotify API to start playback at this track
-    const token = session.access_token;
-    const response = await fetch('https://api.spotify.com/v1/me/player/play', {
+    // Build array of track URIs
+    const uris = playlistData.items.map(item => item.track.uri);
+
+    // Start playback from the chosen index
+    await spotifyFetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ uris: session.queue.map(i => i.song), offset: { position: index } })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uris,
+        offset: { position: index },
+      }),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Spotify error:', errText);
-      return res.status(500).json({ error: 'Failed to start playback', details: errText });
-    }
+    const chosenTrack = playlistData.items[index].track;
+    nowPlaying = {
+      trackName: chosenTrack.name,
+      song: chosenTrack.uri,
+      artists: chosenTrack.artists.map(a => a.name),
+      album: {
+        name: chosenTrack.album.name,
+        images: chosenTrack.album.images,
+      },
+      addedBy: 'Host',
+    };
 
-    // Update nowPlaying
-    session.nowPlaying = session.queue[index];
-
-    res.json({ success: true, nowPlaying: session.nowPlaying });
+    io.emit('queueUpdate', { queue, nowPlaying });
+    res.json({ success: true, nowPlaying });
   } catch (err) {
     console.error('Error in /host/play-from-index:', err);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 });
 

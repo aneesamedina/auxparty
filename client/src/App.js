@@ -161,7 +161,7 @@ function MainQueueApp({ role }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ index: index - 1 }) // convert to 0-based
+        body: JSON.stringify({ sessionId, index: index - 1 })
       });
 
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
