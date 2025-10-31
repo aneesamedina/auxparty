@@ -456,26 +456,43 @@ app.post('/host/pause', async (req, res) => {
 });
 
 app.post('/host/play-from-index', async (req, res) => {
-  const { index } = req.body;
-  const sessionId = req.session?.id; // or however you track the host session
-  const session = sessions[sessionId];
-  if (!session) return res.status(404).send('Session not found');
-
-  const accessToken = session.access_token;
-  const playlistId = session.currentPlaylistId;
-
   try {
-    // Fetch playlist tracks
-    const playlistRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const data = await playlistRes.json();
-    const uris = data.items.map(item => item.track.uri);
+    const sessionId = req.cookies?.sessionId;
+    if (!sessionId || !sessions[sessionId]) {
+      return res.status(401).json({ error: 'Invalid or missing session.' });
+    }
 
-    // Play from chosen index
+    const { index } = req.body;
+    if (index === undefined || index < 0) {
+      return res.status(400).json({ error: 'Invalid track index.' });
+    }
+
+    const accessToken = sessions[sessionId].access_token;
+    const playlistId = sessions[sessionId].currentPlaylistId; // or however you store the playlist
+
+    // Fetch playlist tracks
+    const playlistResponse = await fetch(
+      `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const playlistData = await playlistResponse.json();
+
+    if (!playlistData.items || playlistData.items.length === 0) {
+      return res.status(400).json({ error: 'Playlist is empty.' });
+    }
+
+    const uris = playlistData.items.map((item) => item.track.uri);
+    if (index >= uris.length) {
+      return res.status(400).json({ error: 'Index out of range.' });
+    }
+
+    // Start playback from the chosen track
     await fetch('https://api.spotify.com/v1/me/player/play', {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         uris,
         offset: { position: index },
@@ -483,10 +500,10 @@ app.post('/host/play-from-index', async (req, res) => {
       }),
     });
 
-    res.sendStatus(200);
+    res.status(200).json({ message: `Playing from track index ${index}` });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Failed to start playback');
+    console.error('Error in /host/play-from-index:', err);
+    res.status(500).json({ error: 'Failed to play from track index.' });
   }
 });
 
