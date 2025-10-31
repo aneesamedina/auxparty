@@ -35,8 +35,8 @@ let skipLock = false;
 let skipVotes = {}; // { songUri: Set(userIds) }
 let playNextVotes = {}; // { songUri: Set(userIds) }
 
-const SKIP_MIN_VOTES = 2;      // change this to your desired number
-const PLAYNEXT_MIN_VOTES = 2;  // for play-next voting
+const SKIP_MIN_VOTES = 5;      // change this to your desired number
+const PLAYNEXT_MIN_VOTES = 5;  // for play-next voting
 
 // Spotify Auth
 app.get('/login', (req, res) => {
